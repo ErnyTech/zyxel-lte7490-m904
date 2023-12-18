@@ -1,0 +1,60 @@
+Index: libzyutil-1.0/ECONET/libzyutil_econet_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_econet_wrapper.h	2021-01-21 17:08:54.065382493 +0800
++++ libzyutil-1.0/ECONET/libzyutil_econet_wrapper.h	2021-01-21 18:02:44.737150000 +0800
+@@ -41,8 +41,12 @@
+ zcfgRet_t zyUtilSetMrdInfo(PMRD_DATA mrd);
+ int endian_check();
+ 
++#ifdef ZYXEL_DETECT_PRODUCT_TYPE
+ #define ECONET_BOARDFEATURES_PROC_PATH "/proc/tc3162/prtype"
+ #define ECONET_BOARDFEATURES_PRNAME_PATH "/proc/tc3162/prname"
++#define ECONET_BOARDFEATURES_NO_DSL		(1 << 0)
++#define ECONET_BOARDFEATURES_NO_VOIP	(1 << 1)
++#endif
+ 
+ #if defined (ZYXEL_BOARD_DETECT_BY_GPIO)
+ #define ECONET_COFW_PRODUCT_NAME_PATH "/proc/zyxel/mrd_product_name"
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2021-01-21 17:08:54.705382488 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2021-01-21 18:02:39.170150000 +0800
+@@ -1149,6 +1149,8 @@
+ 001  (1 port FXS) EMG5523-T50B (VMG8623-T50B abandon VD WAN)
+ 010  (0 port FXS) VMG3625-T50B (VMG8623-T50B VoIP not involved)
+ 011               EMG3525-T50B (VMG8623-T50B but VD WAN, VoIP not there)
++110               VMG3625-T50C
++111               EMG3525-T50C (VMG3625-T50C remove VD WAN)
+ */
+ // return: -1: err, 1: has dsl, 0: dsl not on board
+ int zyUtilAskBoardDslSupport(const char *bits)
+@@ -1165,12 +1167,10 @@
+    strncpy(prtype, bits + (n-3), sizeof(prtype)-1);
+ 
+    unsigned long type = strtoul((const char *)prtype, p, 2);
+-   if(type == 1 || type == 3)
++   if(type & ECONET_BOARDFEATURES_NO_DSL)
+      return 0;
+-   else if(type == 0 || type == 2)
+-     return 1;
+    else
+-     return 0;
++     return 1;
+ }
+ 
+ // return: -1: err, 1: has voip, 0: voip not on board
+@@ -1186,12 +1186,10 @@
+    strncpy(prtype, bits + (n-3), sizeof(prtype)-1);
+ 
+    unsigned long type = strtoul((const char *)prtype, p, 2);
+-   if(type == 2 || type == 3)
++   if(type & ECONET_BOARDFEATURES_NO_VOIP)
+      return 0;
+-   else if(type == 0 || type == 1)
+-     return 1;
+    else
+-     return 0;
++     return 1;
+ }
+ #endif
+ 

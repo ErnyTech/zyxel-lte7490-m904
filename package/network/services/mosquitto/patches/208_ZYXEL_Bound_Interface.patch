@@ -1,0 +1,424 @@
+--- mosquitto-1.6.7.orig/lib/cpp/mosquittopp.cpp	2022-03-08 17:05:03.971715000 +0800
++++ mosquitto-1.6.7/lib/cpp/mosquittopp.cpp	2022-03-08 17:25:58.579715000 +0800
+@@ -219,7 +219,11 @@
+ 
+ int mosquittopp::connect(const char *host, int port, int keepalive, const char *bind_address)
+ {
++#if 0
+ 	return mosquitto_connect_bind(m_mosq, host, port, keepalive, bind_address);
++#else // for passing mqtt client parameters
++	return mosquitto_connect_bind(m_mosq, host, port, keepalive, bind_address, NULL);
++#endif
+ }
+ 
+ int mosquittopp::connect_async(const char *host, int port, int keepalive)
+--- mosquitto-1.6.7.orig/lib/mosquitto.h	2022-03-08 17:05:03.967715000 +0800
++++ mosquitto-1.6.7/lib/mosquitto.h	2022-03-08 17:16:58.835715000 +0800
+@@ -474,7 +474,11 @@
+  * See Also:
+  * 	<mosquitto_connect>, <mosquitto_connect_async>, <mosquitto_connect_bind_async>
+  */
++#if 0
+ libmosq_EXPORT int mosquitto_connect_bind(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address);
++#else //for passing mqtt client parameter
++libmosq_EXPORT int mosquitto_connect_bind(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, void* mqtt_Params);
++#endif
+ 
+ /*
+  * Function: mosquitto_connect_bind_v5
+@@ -507,7 +511,11 @@
+  * See Also:
+  * 	<mosquitto_connect>, <mosquitto_connect_async>, <mosquitto_connect_bind_async>
+  */
++#if 0
+ libmosq_EXPORT int mosquitto_connect_bind_v5(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, const mosquitto_property *properties);
++#else // for passing mqtt cilent parameter
++libmosq_EXPORT int mosquitto_connect_bind_v5(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, const mosquitto_property *properties, void* mqtt_Params);
++#endif
+ 
+ /*
+  * Function: mosquitto_connect_async
+--- mosquitto-1.6.7.orig/client/client_shared.c	2022-03-08 17:05:04.011715000 +0800
++++ mosquitto-1.6.7/client/client_shared.c	2022-03-08 17:30:04.827715000 +0800
+@@ -1406,10 +1406,18 @@
+ 	if(cfg->use_srv){
+ 		rc = mosquitto_connect_srv(mosq, cfg->host, cfg->keepalive, cfg->bind_address);
+ 	}else{
++#if 0
+ 		rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props);
++#else // for passing mqtt client parameters
++		rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, NULL);
++#endif
+ 	}
+ #else
++#if 0
+ 	rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props);
++#else // for passing mqtt client parameters
++	rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, NULL);
++#endif
+ #endif
+ 	if(rc>0){
+ 		if(rc == MOSQ_ERR_ERRNO){
+--- mosquitto-1.6.7.orig/lib/net_mosq.h	2022-03-08 17:05:03.967715000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.h	2022-03-08 17:16:58.835715000 +0800
+@@ -55,13 +55,22 @@
+ int net__init(void);
+ void net__cleanup(void);
+ 
++#if 0
+ int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking);
++#else // for passing mqtt client parameters
++int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking, void* mqtt_Params);
++#endif
++
+ #ifdef WITH_BROKER
+ int net__socket_close(struct mosquitto_db *db, struct mosquitto *mosq);
+ #else
+ int net__socket_close(struct mosquitto *mosq);
+ #endif
++#if 0
+ int net__try_connect(const char *host, uint16_t port, mosq_sock_t *sock, const char *bind_address, bool blocking);
++#else // for passing mqtt client parameters
++int net__try_connect(const char *host, uint16_t port, mosq_sock_t *sock, const char *bind_address, bool blocking, void* mqtt_Params);
++#endif
+ int net__try_connect_step1(struct mosquitto *mosq, const char *host);
+ int net__try_connect_step2(struct mosquitto *mosq, uint16_t port, mosq_sock_t *sock);
+ int net__socket_connect_step3(struct mosquitto *mosq, const char *host);
+@@ -82,4 +91,95 @@
+ #define ENGINE_PIN "PIN"
+ #endif
+ 
++#if 1 //copied from obuspa/mqtt.h
++typedef struct
++{
++    unsigned connect_retrytime;
++    unsigned interval_multiplier;
++    unsigned max_interval;
++} mos_mqtt_retry_params_t;
++typedef enum
++{
++    kMqttQos_Worst = 0,
++    kMqttQos_MostOnce = 0,       // TCP Fire and forget, the worst QOS
++    kMqttQos_AtLeastOnce = 1,    // Acknowledged Message, can be sent more than once
++    kMqttQos_ExactlyOnce = 2,    // Fully ackd message, always received once
++    kMqttQos_Best = 2,
++    kMqttQos_Default = kMqttQos_Best,
++} mos_mqtt_qos_t;
++typedef enum
++{
++    kMqttProtocol_3_1,           // Use v3.1 MQTT
++    kMqttProtocol_3_1_1,         // Use v3.1.1 MQTT
++    kMqttProtocol_5_0,           // Use v5.0 MQTT (recommended)
++    kMqttProtocol_Default = kMqttProtocol_5_0,
++    kMqttProtocol_Max,
++} mos_mqtt_protocolver_t;
++typedef enum
++{
++    kMqttTSprotocol_tcpip = 0,
++    kMqttTSprotocol_tls,
++    kMqttTSprotocol_Max,
++} mos_mqtt_tsprotocol_t;
++typedef struct
++{
++    char* host;                   // Hostname of the broker
++    char* bind_address;           // Bind address
++    char* bind_interfaceName;     // Bind address
++    unsigned int port;            // Port for broker
++    int keepalive;                // Keepalive setting for broker connection
++    char* username;               // Username to connect to broker
++    char* password;               // Password to connect to broker
++    int instance;                 // Client instance (Device.MQTT.Client.{i})
++    bool enable;
++
++    mos_mqtt_protocolver_t version;      // MQTT protocol version to use
++
++	//Defined in TR181: Device.LocalAgent.Controller.{i}.MTP.{i}.MQTT.Topic
++    char* topic; // Topic to publish to - controller should sub to this
++
++    // Response topic, may be used - or not. Agent should sub to this.
++    // Depends on the configuration in the broker (in v5.0)
++	//Defined in TR181: Device.LocalAgent.MTP.{i}.MQTT.ResponseTopicConfigured
++    char* response_topic;
++    mos_mqtt_qos_t publish_qos;
++
++    // V5 Params
++    char* client_id;
++
++    // mqtt parameters
++    char* name;
++    mos_mqtt_tsprotocol_t ts_protocol;
++    bool clean_session;
++    bool clean_start;
++    bool request_response_info;
++    bool request_problem_info;
++    char* response_information;
++
++#if 0
++    // These items are not currently used.
++    // Most of these items are not really required for essential MQTT
++    // operation. Some could be added easily though.
++    // TODO: Add these
++    unsigned int session_expiry;
++    unsigned int receive_max;
++    unsigned int max_packet_size;
++    unsigned int topic_alias_max;
++    bool will_enable;
++    unsigned int will_qos;
++    bool will_retain;
++    unsigned int will_delay_interval;
++    unsigned int will_message_expiry;
++    char* will_content_type;
++    char* will_response_topic;
++    char* will_topic;
++    char* will_value;
++    unsigned int pubmsg_expinterval;
++    unsigned int message_retrytime;
++    char* auth_method;
++#endif
++    mos_mqtt_retry_params_t retry;
++} mos_mqtt_conn_params_t;
++#endif
++
+ #endif
+--- mosquitto-1.6.7.orig/lib/net_mosq.c	2022-03-08 17:05:03.971715000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.c	2022-03-08 17:44:28.775715000 +0800
+@@ -370,7 +370,11 @@
+ #endif
+ 
+ 
++#if 0
+ int net__try_connect(const char *host, uint16_t port, mosq_sock_t *sock, const char *bind_address, bool blocking)
++#else // for passing mqtt client parameters
++int net__try_connect(const char *host, uint16_t port, mosq_sock_t *sock, const char *bind_address, bool blocking, void* mqtt_Params)
++#endif
+ {
+ 	struct addrinfo hints;
+ 	struct addrinfo *ainfo, *rp;
+@@ -422,6 +426,7 @@
+ 			continue;
+ 		}
+ 
++		//printf("%s:%d bound IP %s, interface name is %s.\n", __func__, __LINE__, bind_address, ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName);
+ 		if(bind_address){
+ //#ifdef ZYXEL_MQTT_PUBLISHER
+ #if 1
+@@ -440,13 +445,22 @@
+ 					else{
+ 						printf("[Error]%s:%s(%d) getnameinfo failed.(%s)\n", __FILE__, __func__, __LINE__, ifa->ifa_name);
+ 					}
+-					
+ 				}
+ 				if(findWanIf){
+ 					ret = setsockopt(*sock, SOL_SOCKET, SO_BINDTODEVICE, (char *)&boundIf,  sizeof(boundIf));
+ 					if(ret != 0){
+ 						printf("[Error] Set socket option(SO_BINDTODEVICE) failed (%d).\n", ret);
+ 					}
++					for(rp_bind = ainfo_bind; rp_bind != NULL; rp_bind = rp_bind->ai_next){
++						if(bind(*sock, rp_bind->ai_addr, rp_bind->ai_addrlen) == 0){
++							break;
++						}
++					}
++					if(!rp_bind){
++						COMPAT_CLOSE(*sock);
++						*sock = INVALID_SOCKET;
++						continue;
++					}
+ 				}
+ 				else{
+ 					printf("[Error] %s:%s(%d) Can not find address(%s) interface. Bind failed.\n", __FILE__, __func__, __LINE__, bind_address);
+@@ -459,16 +473,14 @@
+ 				printf("[Error] %s:%S:(%d) getifaddrs() failed.\n", __FILE__, __func__, __LINE__);
+ 			}
+ #endif
++		}
+ 
+-			for(rp_bind = ainfo_bind; rp_bind != NULL; rp_bind = rp_bind->ai_next){
+-				if(bind(*sock, rp_bind->ai_addr, rp_bind->ai_addrlen) == 0){
+-					break;
+-				}
+-			}
+-			if(!rp_bind){
+-				COMPAT_CLOSE(*sock);
+-				*sock = INVALID_SOCKET;
+-				continue;
++		if(!findWanIf && ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName != NULL){
++			//printf("Bind fail with IP address, maybe it is IPPassthru mode, bind it with interface name now..\n");
++			snprintf(boundIf.ifr_name, IFNAMSIZ, "%s", ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName);
++			ret = setsockopt(*sock, SOL_SOCKET, SO_BINDTODEVICE, (char *)&boundIf,  sizeof(boundIf));
++			if(ret != 0){
++				printf("[Error] Set socket option(SO_BINDTODEVICE) failed (%d).\n", ret);
+ 			}
+ 		}
+ 
+@@ -897,14 +909,22 @@
+ }
+ 
+ /* Create a socket and connect it to 'ip' on port 'port'.  */
++#if 0
+ int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking)
++#else // for passing mqtt client parameters
++int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking, void* mqtt_Params)
++#endif
+ {
+ 	mosq_sock_t sock = INVALID_SOCKET;
+ 	int rc, rc2;
+ 
+ 	if(!mosq || !host || !port) return MOSQ_ERR_INVAL;
+ 
++#if 0
+ 	rc = net__try_connect(host, port, &sock, bind_address, blocking);
++#else // for passing mqtt client parameters
++	rc = net__try_connect(host, port, &sock, bind_address, blocking, mqtt_Params);
++#endif
+ 	if(rc > 0) return rc;
+ 
+ 	mosq->sock = sock;
+--- mosquitto-1.6.7.orig/lib/connect.c	2022-03-08 17:05:03.971715000 +0800
++++ mosquitto-1.6.7/lib/connect.c	2022-03-08 17:16:58.835715000 +0800
+@@ -32,10 +32,9 @@
+ 
+ static char alphanum[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+ 
+-static int mosquitto__reconnect(struct mosquitto *mosq, bool blocking, const mosquitto_property *properties);
++static int mosquitto__reconnect(struct mosquitto *mosq, bool blocking, const mosquitto_property *properties, void* mqtt_Params);
+ static int mosquitto__connect_init(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address);
+ 
+-
+ static int mosquitto__connect_init(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address)
+ {
+ 	int i;
+@@ -99,16 +98,32 @@
+ 
+ int mosquitto_connect(struct mosquitto *mosq, const char *host, int port, int keepalive)
+ {
++#if 0
+ 	return mosquitto_connect_bind(mosq, host, port, keepalive, NULL);
++#else // for passing mqtt client parameter
++	return mosquitto_connect_bind(mosq, host, port, keepalive, NULL, NULL);
++#endif
+ }
+ 
+ 
++#if 0
+ int mosquitto_connect_bind(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address)
++#else // for passing mqtt client parameter
++int mosquitto_connect_bind(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, void* mqtt_Params)
++#endif
+ {
++#if 0
+ 	return mosquitto_connect_bind_v5(mosq, host, port, keepalive, bind_address, NULL);
++#else // for passing mqtt client parameter
++	return mosquitto_connect_bind_v5(mosq, host, port, keepalive, bind_address, NULL, mqtt_Params);
++#endif
+ }
+ 
++#if 0
+ int mosquitto_connect_bind_v5(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, const mosquitto_property *properties)
++#else // for passing mqtt client parameter
++int mosquitto_connect_bind_v5(struct mosquitto *mosq, const char *host, int port, int keepalive, const char *bind_address, const mosquitto_property *properties, void* mqtt_Params)
++#endif
+ {
+ 	int rc;
+ 
+@@ -122,7 +137,11 @@
+ 
+ 	mosquitto__set_state(mosq, mosq_cs_new);
+ 
++#if 0
+ 	return mosquitto__reconnect(mosq, true, properties);
++#else // for passing mqtt client parameters
++	return mosquitto__reconnect(mosq, true, properties, mqtt_Params);
++#endif
+ }
+ 
+ 
+@@ -137,23 +156,35 @@
+ 	int rc = mosquitto__connect_init(mosq, host, port, keepalive, bind_address);
+ 	if(rc) return rc;
+ 
++#if 0
+ 	return mosquitto__reconnect(mosq, false, NULL);
++#else // for passing mqtt client parameters
++	return mosquitto__reconnect(mosq, false, NULL, NULL);
++#endif
+ }
+ 
+ 
+ int mosquitto_reconnect_async(struct mosquitto *mosq)
+ {
++#if 0
+ 	return mosquitto__reconnect(mosq, false, NULL);
++#else // for passing mqtt client parameters
++	return mosquitto__reconnect(mosq, false, NULL, NULL);
++#endif
+ }
+ 
+ 
+ int mosquitto_reconnect(struct mosquitto *mosq)
+ {
++#if 0
+ 	return mosquitto__reconnect(mosq, true, NULL);
++#else // for passing mqtt client parameters
++	return mosquitto__reconnect(mosq, true, NULL, NULL);
++#endif
+ }
+ 
+ 
+-static int mosquitto__reconnect(struct mosquitto *mosq, bool blocking, const mosquitto_property *properties)
++static int mosquitto__reconnect(struct mosquitto *mosq, bool blocking, const mosquitto_property *properties, void* mqtt_Params)
+ {
+ 	const mosquitto_property *outgoing_properties = NULL;
+ 	mosquitto_property local_property;
+@@ -195,11 +226,20 @@
+ 
+ #ifdef WITH_SOCKS
+ 	if(mosq->socks5_host){
++#if 0
+ 		rc = net__socket_connect(mosq, mosq->socks5_host, mosq->socks5_port, mosq->bind_address, blocking);
++#else // for passing mqtt client parameters
++		rc = net__socket_connect(mosq, mosq->socks5_host, mosq->socks5_port, mosq->bind_address, blocking, mqtt_Params);
++#endif
+ 	}else
+ #endif
+ 	{
++#if 0
+ 		rc = net__socket_connect(mosq, mosq->host, mosq->port, mosq->bind_address, blocking);
++#else // for passing mqtt client parameters
++		rc = net__socket_connect(mosq, mosq->host, mosq->port, mosq->bind_address, blocking, mqtt_Params);
++#endif
++
+ 	}
+ 	if(rc>0){
+ 		mosquitto__set_state(mosq, mosq_cs_connect_pending);
+--- mosquitto-1.6.7.orig/src/bridge.c	2022-03-08 17:05:03.983715000 +0800
++++ mosquitto-1.6.7/src/bridge.c	2022-03-08 17:35:15.659715000 +0800
+@@ -387,7 +387,11 @@
+ 	}
+ 
+ 	log__printf(NULL, MOSQ_LOG_NOTICE, "Connecting bridge %s (%s:%d)", context->bridge->name, context->bridge->addresses[context->bridge->cur_address].address, context->bridge->addresses[context->bridge->cur_address].port);
++#if 0
+ 	rc = net__socket_connect(context, context->bridge->addresses[context->bridge->cur_address].address, context->bridge->addresses[context->bridge->cur_address].port, NULL, false);
++#else // for passing mqtt client parameters
++	rc = net__socket_connect(context, context->bridge->addresses[context->bridge->cur_address].address, context->bridge->addresses[context->bridge->cur_address].port, NULL, false, NULL);
++#endif
+ 	if(rc > 0){
+ 		if(rc == MOSQ_ERR_TLS){
+ 			net__socket_close(db, context);
+--- mosquitto-1.6.7.orig/src/loop.c	2022-03-08 17:05:03.983715000 +0800
++++ mosquitto-1.6.7/src/loop.c	2022-03-08 17:37:42.991715000 +0800
+@@ -248,9 +248,15 @@
+ 							&& now > context->bridge->primary_retry){
+ 
+ 						if(context->bridge->primary_retry_sock == INVALID_SOCKET){
++#if 0
+ 							rc = net__try_connect(context->bridge->addresses[0].address,
+ 									context->bridge->addresses[0].port,
+ 									&context->bridge->primary_retry_sock, NULL, false);
++#else // for passing mqtt client parameters
++							rc = net__try_connect(context->bridge->addresses[0].address,
++									context->bridge->addresses[0].port,
++									&context->bridge->primary_retry_sock, NULL, false, NULL);
++#endif
+ 
+ 							if(rc == 0){
+ 								COMPAT_CLOSE(context->bridge->primary_retry_sock);

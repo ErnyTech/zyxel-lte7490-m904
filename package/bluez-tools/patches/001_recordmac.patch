@@ -1,0 +1,47 @@
+Index: bluez-tools/src/lib/agent-helper.c
+===================================================================
+--- bluez-tools.orig/src/lib/agent-helper.c	2021-04-14 14:27:11.000000000 +0800
++++ bluez-tools/src/lib/agent-helper.c	2021-05-13 11:19:15.400437000 +0800
+@@ -316,10 +316,13 @@
+         const gchar *pin = _find_device_pin(device_get_dbus_object_path(device_obj));
+         gchar *ret = NULL;
+         gboolean invoke = FALSE;
++	gchar *btmac = NULL;
+ 
+         if (_interactive)
+-            g_print("Device: %s (%s)\n", device_get_alias(device_obj, &error), device_get_address(device_obj, &error));
+-
++	{
++            btmac = device_get_address(device_obj, &error);
++            g_print("Device: %s (%s)\n", device_get_alias(device_obj, &error), btmac);
++	}
+         if(error)
+         {
+             g_critical("Failed to get remote device's MAC address: %s", error->message);
+@@ -335,6 +338,10 @@
+                 g_print("Passkey found\n");
+             sscanf(pin, "%ms", &ret);
+             invoke = TRUE;
++            char cmd[50]={0};
++            snprintf(cmd,sizeof(cmd),"echo \"%s\" > /tmp/listmacbt",btmac);
++            system(cmd);
++
+         }
+         else if (_interactive)
+         {
+--- bluez-tools.orig/src/lib/agent-helper.c     2021-05-19 14:12:51.264437000 +0800
++++ bluez-tools/src/lib/agent-helper.c  2021-05-19 14:15:05.384437000 +0800
+@@ -221,8 +221,10 @@
+         const gchar *pin = _find_device_pin(device_get_dbus_object_path(device_obj));
+
+         if (_interactive)
+-            g_print("Device: %s (%s)\n", device_get_alias(device_obj, &error), device_get_address(device_obj, &error));
+-
++       {
++            system("touch /tmp/sspmode_1");
++           g_print("Device: %s (%s)\n", device_get_alias(device_obj, &error), device_get_address(device_obj, &error));
++       }
+         if(error)
+         {
+             g_critical("Failed to get remote device's MAC address: %s", error->message);
+

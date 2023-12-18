@@ -1,0 +1,39 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-08-06 12:22:18.878914528 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-08-06 12:22:54.134914528 +0800
+@@ -651,10 +651,18 @@
+ 		case ZYLED_ACTION_BLINK:
+ 			if(blink_rate == ZYLED_RATE_SLOW){
+ 				state = kLedStateSlowBlinkContinues;
+-			}else if(blink_rate == ZYLED_RATE_SLOW){
++			}else if(blink_rate == ZYLED_RATE_FAST){
+ 				state = kLedStateFastBlinkContinues;
+ 			}
+ 			break;
++#ifdef ZYXEL_OPAL_EXTENDER
++		case ZYLED_ACTION_UP:
++			state = kLedStateUp;
++			break;
++		case ZYLED_ACTION_DOWN:
++			state = kLedStateDown;
++			break;
++#endif
+ 		default:
+ 			state = kLedStateOff;
+ 			break;
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-08-06 12:22:18.878914528 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-08-06 12:23:11.642914528 +0800
+@@ -67,6 +67,10 @@
+     ZYLED_ACTION_OFF = 0,
+     ZYLED_ACTION_BLINK,
+     ZYLED_ACTION_ON,
++#ifdef ZYXEL_OPAL_EXTENDER
++    ZYLED_ACTION_UP,
++    ZYLED_ACTION_DOWN,
++#endif
+     ZYLED_ACTION_MAX
+ } ZYLED_ACTION;
+ 

@@ -1,0 +1,250 @@
+--- a/networking/ftpgetput.c
++++ b/networking/ftpgetput.c
+@@ -94,7 +94,7 @@ struct globals {
+ 	const char *ethpriority;
+ 	const char *dummy_size;
+ #ifdef ZCFG_SUPPORT_TR369
+-	char *instanceNum;
++	const char *instanceNum;
+ #endif
+ #endif
+ 	char buf[4]; /* actually [BUFSZ] */
+@@ -117,10 +117,16 @@ struct BUG_G_too_big {
+ #define dscp           (G.dscp          )
+ #define ethpriority    (G.ethpriority   )
+ #define dummy_size     (G.dummy_size    )
+-#endif
++#ifdef ZCFG_SUPPORT_TR369
++#define instanceNum    (G.instanceNum   )
++#endif //ZCFG_SUPPORT_TR369
++#endif //ZCFG_SUPPORT
+ #define INIT_G() do { } while (0)
+ #ifdef ZCFG_SUPPORT
+ static rdm_IpDiagUlDiag_t *ipDiagUlObj = NULL;
++#ifdef ZCFG_SUPPORT_TR369
++static rdm_IpDiagDlDiag_t *ipDiagDlObj = NULL;
++#endif
+ static unsigned int testSendLength = 0;
+ static char ipDscp = 0, ePriority = 0;
+ static int diagStateErrCode = 0;
+@@ -132,6 +138,9 @@ static unsigned long long ifBytesSentSta
+ static unsigned long long ifBytesSentEnd = 0;
+ 
+ static void outputDiagUlData(int);
++#ifdef ZCFG_SUPPORT_TR369
++static void outputDiagDlData(int);
++#endif
+ extern unsigned long long getReceiveByte(const char *ifName);
+ extern unsigned long long getSentByte(const char *ifName);
+ #endif
+@@ -323,7 +332,13 @@ static int sendEsmdMsg(const char *data,
+    }
+ 
+    sendMsgHdr = (zcfgMsg_t *)malloc(sizeof(zcfgMsg_t) + dataLen);
+-   sendMsgHdr->type = ZCFG_MSG_UPLOAD_DIAG_COMPLETE_EVENT;
++	/* Check to see if the command is ftpget or ftput */
++	// ftpget
++	if (applet_name[3] == 'g') {
++		sendMsgHdr->type = ZCFG_MSG_DOWNLOAD_DIAG_COMPLETE_EVENT;
++	} else {	// ftpput
++		sendMsgHdr->type = ZCFG_MSG_UPLOAD_DIAG_COMPLETE_EVENT;
++	}
+    sendMsgHdr->length = dataLen;
+    sendMsgHdr->srcEid = ZCFG_EID_FTPGP;
+    sendMsgHdr->dstEid = ZCFG_EID_ESMD;
+@@ -341,7 +356,7 @@ static void outputDiagUlData(int rt)
+ #endif
+ 	zcfgRet_t rst;
+ #ifdef ZCFG_SUPPORT_TR369
+-	char dlDiagOuputPath[128];//TR-369
++	char ulDiagOuputPath[128];//TR-369
+ #endif
+ 
+ 	if(rt == EXIT_SUCCESS) {
+@@ -403,8 +418,8 @@ static void outputDiagUlData(int rt)
+ 		json_object_object_add(ulDiagObjParams, "TotalBytesSent", json_object_new_int(ipDiagUlObj->TotalBytesSent));
+ 	}
+ #ifdef ZCFG_SUPPORT_TR369
+-   	snprintf(dlDiagOuputPath, sizeof(dlDiagOuputPath), "%s.dlDiag%s", DIAG_RESULT_PATH, G.instanceNum);
+-	json_object_to_file(dlDiagOuputPath, ulDiagObjParams);
++	snprintf(ulDiagOuputPath, sizeof(ulDiagOuputPath), "%s.ulDiag%s", DIAG_RESULT_PATH, instanceNum);
++	json_object_to_file(ulDiagOuputPath, ulDiagObjParams);
+ #endif
+ 
+ 	printf("DiagnosticsState: %s\n", ipDiagUlObj->DiagnosticsState);
+@@ -464,6 +479,143 @@ static void outputDiagUlData(int rt)
+ #endif
+ }
+ 
++
++#ifdef ZCFG_SUPPORT_TR369
++static void outputDiagDlData(int rt)
++{
++#ifdef SET_TEST_DATA_RDM
++	objIndex_t objIid;
++    rdm_IpDiagUlDiag_t *data;
++#endif
++	zcfgRet_t rst;
++
++#ifdef ZCFG_SUPPORT_TR369
++	char dlDiagOuputPath[128];
++#endif
++
++	if(rt == EXIT_SUCCESS) {
++#ifdef ZCFG_SUPPORT_TR369
++		strcpy(ipDiagDlObj->DiagnosticsState, "Complete");
++#else
++		strcpy(ipDiagDlObj->DiagnosticsState, "Completed");
++#endif
++	}else {
++		switch(diagStateErrCode) {
++		case STATUS_ERR_INIT_CONN_FAILED:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_InitConnectionFailed");
++			break;
++		case STATUS_ERR_NO_RESP:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoResponse");
++			break;
++		case STATUS_ERR_PASSWD_REQ_FAILED:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_PasswordRequestFailed");
++			break;
++		case STATUS_ERR_LOGIN_FAILED:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_LoginFailed");
++			break;
++		case STATUS_ERR_NO_TRANS_MODE:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoTransferMode");
++			break;
++		case STATUS_ERR_NO_PASV:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoPASV");
++			break;
++		case STATUS_ERR_NO_CWD:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoCWD");
++			break;
++		case STATUS_ERR_NO_STOR:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoSTOR");
++			break;
++		case STATUS_ERR_NO_TRANS_COMPLETE:
++			strcpy(ipDiagDlObj->DiagnosticsState, "Error_NoTransferComplete");
++			break;
++		default:
++			strcpy(ipDiagDlObj->DiagnosticsState, "None");
++			break;
++		}
++	}
++
++	struct json_object *dlDiagObjParams = json_object_new_object();
++	json_object_object_add(dlDiagObjParams, "DiagnosticsState", json_object_new_string(ipDiagDlObj->DiagnosticsState));
++
++	if(!strcmp(ipDiagDlObj->DiagnosticsState, "Completed")
++#ifdef ZCFG_SUPPORT_TR369
++	||	!strcmp(ipDiagDlObj->DiagnosticsState, "Complete")
++#endif
++			){
++		json_object_object_add(dlDiagObjParams, "ROMTime", json_object_new_string(ipDiagDlObj->ROMTime));
++		json_object_object_add(dlDiagObjParams, "BOMTime", json_object_new_string(ipDiagDlObj->BOMTime));
++		json_object_object_add(dlDiagObjParams, "EOMTime", json_object_new_string(ipDiagDlObj->EOMTime));
++		json_object_object_add(dlDiagObjParams, "TCPOpenRequestTime", json_object_new_string(ipDiagDlObj->TCPOpenRequestTime));
++		json_object_object_add(dlDiagObjParams, "TCPOpenResponseTime", json_object_new_string(ipDiagDlObj->TCPOpenResponseTime));
++		// json_object_object_add(dlDiagObjParams, "TestBytesSent", json_object_new_int(ipDiagDlObj->TestBytesSent));
++		json_object_object_add(dlDiagObjParams, "TotalBytesReceived", json_object_new_int(ipDiagDlObj->TotalBytesReceived));
++		json_object_object_add(dlDiagObjParams, "TotalBytesSent", json_object_new_int(ipDiagDlObj->TotalBytesSent));
++	}
++
++#ifdef ZCFG_SUPPORT_TR369
++	snprintf(dlDiagOuputPath, sizeof(dlDiagOuputPath), "%s.dlDiag%s", DIAG_RESULT_PATH, instanceNum);
++	json_object_to_file(dlDiagOuputPath, dlDiagObjParams);
++#endif
++
++	printf("DiagnosticsState: %s\n", ipDiagDlObj->DiagnosticsState);
++	printf("Interface: %s\n", ipDiagDlObj->Interface);
++	printf("DownloadURL: %s\n", ipDiagDlObj->DownloadURL);
++	printf("UploadTransports: %s\n", ipDiagDlObj->DownloadTransports);
++	printf("DSCP: %d\n", ipDiagDlObj->DSCP);
++	printf("EthernetPriority: %d\n", ipDiagDlObj->EthernetPriority);
++	// printf("TestFileLength: %u\n", ipDiagDlObj->TestFileLength);
++	printf("ROMTime: %s\n", ipDiagDlObj->ROMTime);
++	printf("BOMTime: %s\n", ipDiagDlObj->BOMTime);
++	printf("EOMTime: %s\n", ipDiagDlObj->EOMTime);
++	// printf("TestBytesSent: %u\n", ipDiagDlObj->TestBytesSent);
++    printf("TotalBytesReceived: %u\n", ipDiagDlObj->TotalBytesReceived);
++	printf("TotalBytesSent: %u\n", ipDiagDlObj->TotalBytesSent);
++	printf("TCPOpenRequestTime: %s\n", ipDiagDlObj->TCPOpenRequestTime);
++	printf("TCPOpenResponseTime: %s\n", ipDiagDlObj->TCPOpenResponseTime);
++
++	const char *dlDiagObjParamsStr = json_object_to_json_string(dlDiagObjParams);
++	rst = sendEsmdMsg(dlDiagObjParamsStr, strlen(dlDiagObjParamsStr));
++	json_object_put(dlDiagObjParams);
++	//rst = sendEsmdMsg((const char *)ipDiagDlObj, sizeof(rdm_IpDiagDlDiag_t));
++	if((rst != ZCFG_SUCCESS) && (rst != ZCFG_SUCCESS_AND_NO_REPLY)) {
++		printf("'ftpget' sending Esmd message failed!\n");
++	}
++
++	free(ipDiagDlObj);
++
++#ifdef SET_TEST_DATA_RDM
++	IID_INIT(objIid);
++
++	if(zcfgFeObjStructGet(RDM_OID_IP_DIAG_DL_DIAG, &objIid, (void *)&data) != ZCFG_SUCCESS) {
++		printf("'ftpget' get DownloadDiagnostics test data to rdm fail\n");
++		return;
++	}
++
++	// data->TestFileLength = ipDiagDlObj->TestFileLength;
++	strcpy(data->DiagnosticsState, ipDiagDlObj->DiagnosticsState);
++	strcpy(data->Interface, ipDiagDlObj->Interface);
++	strcpy(data->UploadURL, ipDiagDlObj->DownloadURL);
++/*
++	strcpy(data->ROMTime, ipDiagDlObj->ROMTime);
++	strcpy(data->BOMTime, ipDiagDlObj->BOMTime);
++	strcpy(data->EOMTime, ipDiagDlObj->EOMTime);
++	strcpy(data->TCPOpenRequestTime, ipDiagUlObj->TCPOpenRequestTime);
++	strcpy(data->TCPOpenResponseTime, ipDiagUlObj->TCPOpenResponseTime);
++	data->DSCP = ipDiagDlObj->DSCP;
++	data->EthernetPriority = ipDiagDlObj->EthernetPriority;
++	data->TotalBytesSent = ipDiagDlObj->TotalBytesSent;
++	strcpy(data->UploadTransports, ipDiagDlObj->UploadTransports);
++*/
++
++	if(zcfgFeObjStructSetWithoutApply(RDM_OID_IP_DIAG_DL_DIAG, &objIid, (void *)data, NULL) != ZCFG_SUCCESS) {
++		printf("'ftpget' set DownloadDiagnostics test data to rdm fail\n");
++	}
++	free(data);
++#endif
++
++}
++#endif //ZCFG_SUPPORT_TR369
++
+ static int send_dummy_data_and_QUIT(const unsigned int data_size, int to)
+ {
+ 	int rt = EXIT_SUCCESS;
+@@ -860,7 +1012,7 @@ int ftpgetput_main(int argc UNUSED_PARAM
+ #endif
+ 			, &user, &password, &port, &intf, &url, &dscp, &ethpriority, &dummy_size
+ #ifdef ZCFG_SUPPORT_TR369
+-			, &G.instanceNum
++			, &instanceNum
+ #endif
+ 			, &verbose_flag, &do_continue
+ 			);
+@@ -935,8 +1087,21 @@ int ftpgetput_main(int argc UNUSED_PARAM
+ 		rt = ftp_action(argv[1], argv[2] ? argv[2] : argv[1]);
+ 	}else rt = EXIT_FAILURE;
+ 
+-	//output test data
++#ifdef ZCFG_SUPPORT_TR369
++	/* Check to see if the command is ftpget or ftput */
++	// ftpget
++	if (applet_name[3] == 'g') {
++		// output download diagnostics data
++		outputDiagDlData(rt);
++	} else {
++		// ftpput
++		// output upload diagnostics data
++		outputDiagUlData(rt);
++	}
++#else
++	// output test data
+ 	outputDiagUlData(rt);
++#endif
+ 
+ 	return rt;
+ #else

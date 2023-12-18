@@ -1,0 +1,155 @@
+diff -urN wide-dhcpv6-20080615_org/dhcp6relay_apis.c wide-dhcpv6-20080615/dhcp6relay_apis.c
+--- wide-dhcpv6-20080615_org/dhcp6relay_apis.c	1970-01-01 08:00:00.000000000 +0800
++++ wide-dhcpv6-20080615/dhcp6relay_apis.c	2019-11-12 10:21:30.429791000 +0800
+@@ -0,0 +1,98 @@
++/*
++ * Jessie Lu@2019.10.02: APIs for DHCPv6 Relay
++ */
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <sys/queue.h>
++#include <sys/uio.h>
++#include <sys/signal.h>
++#include <net/if.h>
++#ifdef __FreeBSD__
++#include <net/if_var.h>
++#endif
++#include <netinet/in.h>  // for INET6_ADDRSTRLEN
++
++#ifdef __KAME__
++#include <netinet6/in6_var.h>
++#endif
++
++#include <netdb.h>
++#include <arpa/inet.h> // for inet_pton, etc.
++#include <stdio.h>
++#include <stdarg.h>
++#include <syslog.h>
++#include <unistd.h> // for close(socket)
++#include <stdlib.h>		/* XXX: freebsd2 needs this for opt{arg,ind} */
++#include <errno.h>
++#include <err.h>
++#include <string.h>
++#include <dhcp6.h>
++#include <config.h>
++#include <common.h>
++#include <time.h>
++#include <ifaddrs.h>
++
++
++#define DHCPV6_NETIF_V6_IPADDR "/proc/net/if_inet6"
++
++
++
++int dhcp6relay_getipv6ifaddr(char *ifname, struct in6_addr *linkaddr, char *relaydevice)
++{
++	int ret = -1;
++	FILE *pfd = NULL;
++	char cmd[256] = {0};
++	char line[256] = {0}, linkip[256]={0};
++	char ip[256] = {0}, elses[5][8];
++	int i=0, j=0;
++
++	dprintf(LOG_DEBUG, FNAME, "[%d] Enter, ifname(%s), linkaddr(%s), relaydevice(%s)", __LINE__, ifname, in6addr2str(linkaddr, 0), relaydevice);
++
++	if (ifname && linkaddr) {
++		if (relaydevice) {
++			snprintf(cmd, sizeof(cmd), "cat %s | grep %s", DHCPV6_NETIF_V6_IPADDR, relaydevice);
++		} else {
++			snprintf(cmd, sizeof(cmd), "cat %s", DHCPV6_NETIF_V6_IPADDR);
++		}
++
++		pfd = popen(cmd, "r");
++		if (pfd) {
++			while((fgets(line, 256, pfd)) != NULL) {
++				if ((strlen(line) > 0) && (!strstr(line, ifname))
++					&& (strncmp(line, "0000", 4) && strncmp(line, "fe80", 4))
++				) {
++					memset(&elses, 0x0, sizeof(elses));
++					memset(linkip, 0x0, sizeof(linkip));
++
++					
++					if (relaydevice) {
++						if (!strstr(line, relaydevice)) {
++							continue;
++						}
++					}
++					
++					sscanf(line, "%s %s %s %s %s %s", ip, elses[0], elses[1], elses[2], elses[3], elses[4]);
++					dprintf(LOG_DEBUG, FNAME, "[%d] ip(%s), elses(%s %s %s %s %s)...", __LINE__, ip, elses[0], elses[1], elses[2], elses[3], elses[4]);
++
++					dprintf(LOG_DEBUG, FNAME, "[%d] Found!! wan(%s), ip(%s)...", __LINE__, elses[4], ip);
++					for (i=0; i<strlen(ip); i++) {
++						linkip[j++] = ip[i];
++						if ((i % 4 == 3) && (j < 39)) {
++							linkip[j++] = ':';
++						}
++					}
++					dprintf(LOG_DEBUG, FNAME, "[%d] linkip(%s)...", __LINE__, linkip);
++
++					inet_pton(AF_INET6, linkip, linkaddr);
++
++					ret = 1;
++				}
++				memset(line, 0x0, sizeof(line));
++			}
++			pclose(pfd);
++		}
++	}
++
++	dprintf(LOG_DEBUG, FNAME, "[%d] Exit...\n", __LINE__);
++	return ret;
++}
+diff -urN wide-dhcpv6-20080615_org/dhcp6relay.c wide-dhcpv6-20080615/dhcp6relay.c
+--- wide-dhcpv6-20080615_org/dhcp6relay.c	2019-11-12 10:22:34.733792547 +0800
++++ wide-dhcpv6-20080615/dhcp6relay.c	2019-11-12 10:22:54.397467133 +0800
+@@ -753,6 +753,10 @@
+ 	return (0);
+ }
+ 
++#ifdef DHCPV6_RELAY_SUPPORT
++extern int dhcp6relay_getipv6ifaddr(char *ifname, struct in6_addr *linkaddr, char *relaydevice);
++#endif
++
+ static void
+ relay_to_server(dh6, len, from, ifname, ifid)
+ 	struct dhcp6 *dh6;
+@@ -811,6 +815,15 @@
+ 
+ 	/* find a global address to fill in the link address field */
+ 	memset(&linkaddr, 0, sizeof (linkaddr));
++
++#ifdef DHCPV6_RELAY_SUPPORT
++	if (dhcp6relay_getipv6ifaddr(ifname, &linkaddr, relaydevice) == 1) {
++		dprintf(LOG_DEBUG, FNAME, "[%d] ifname(%s), linkaddr(%s), relaydevice(%s)", __LINE__, ifname, in6addr2str(&linkaddr, 0), relaydevice);
++	} else {
++		dprintf(LOG_NOTICE, FNAME, "failed to find a global address on %s", relaydevice);
++		goto out;
++	}
++#else
+ 	for (p = TAILQ_FIRST(&global_prefixes); p; p = TAILQ_NEXT(p, plink)) {
+ 		if (getifaddr(&linkaddr, ifname, &p->paddr.sin6_addr,
+ 			      p->plen, 1, IN6_IFF_INVALID) == 0) /* found */
+@@ -829,6 +842,7 @@
+ 		if (dh6->dh6_msgtype != DH6_RELAY_FORW)
+ 			goto out;
+ 	}
++#endif // DHCPV6_RELAY_SUPPORT
+ 
+ 	if (dh6->dh6_msgtype == DH6_RELAY_FORW) {
+ 		struct dhcp6_relay *dh6relay0 = (struct dhcp6_relay *)dh6;
+diff -urN wide-dhcpv6-20080615_org/Makefile.in wide-dhcpv6-20080615/Makefile.in
+--- wide-dhcpv6-20080615_org/Makefile.in	2019-11-12 10:22:34.733792547 +0800
++++ wide-dhcpv6-20080615/Makefile.in	2019-11-12 10:23:00.504185795 +0800
+@@ -74,6 +74,11 @@
+ SERVOBJS=	dhcp6s.o common.o dhcp6s_ifaddrs.o if.o config.o timer.o lease.o \
+ 	base64.o auth.o dhcp6_ctl.o $(GENSRCS:%.c=%.o)
+ RELAYOBJS =	dhcp6relay.o dhcp6relay_script.o common.o timer.o
++
++ifeq ($(CONFIG_PACKAGE_wide-dhcpv6-relay),y)
++RELAYOBJS += dhcp6relay_apis.o
++endif
++
+ CTLOBJS= dhcp6_ctlclient.o base64.o auth.o
+ CLEANFILES+=	y.tab.h
+ 

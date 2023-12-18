@@ -1,0 +1,43 @@
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-07-24 14:33:32.789052039 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-07-24 14:33:56.543738898 +0800
+@@ -450,6 +450,38 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilSetSoftwareLedState(ZYLED_INDEX index ,ZYLED_ACTION action, ZYLED_RATE blink_rate)
++{
++	char led_file_name[128] = {0}, sysCmd[128] = {0};
++
++	switch(index) {
++		case ZYLED_POWER_GREEN:
++			strcpy(led_file_name, "led_pwr_green");
++			break;
++		case ZYLED_POWER_RED:
++			strcpy(led_file_name, "led_pwr_red");
++			break;
++#ifdef ZYXEL_OPAL_EXTENDER
++		case ZYLED_LINKQUALITY_GREEN:
++			strcpy(led_file_name, "led_quality_green");;
++			break;
++		case ZYLED_LINKQUALITY_RED:
++			strcpy(led_file_name, "led_quality_red");
++			break;
++		case ZYLED_LINKQUALITY_AMBER:
++			strcpy(led_file_name, "led_quality_amber");
++			break;
++#endif
++		default:
++			break;
++	}
++
++	sprintf(sysCmd, "echo %d > /proc/tc3162/%s", action, led_file_name);
++	system(sysCmd);
++
++	return ZCFG_SUCCESS;
++}
++
+ zcfgRet_t zyUtilIGetModelID(char *model_id)
+ {
+ 	struct mrd mrd_buff;

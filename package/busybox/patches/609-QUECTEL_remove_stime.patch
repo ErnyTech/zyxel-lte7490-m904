@@ -1,0 +1,57 @@
+Index: busybox-1_20_1/coreutils/date.c
+===================================================================
+--- busybox-1_20_1.orig/coreutils/date.c
++++ busybox-1_20_1/coreutils/date.c
+@@ -266,6 +266,11 @@ int date_main(int argc UNUSED_PARAM, cha
+ #else
+ 		time(&ts.tv_sec);
+ #endif
++#ifdef TARGET_quectel
++#if !ENABLE_FEATURE_DATE_NANO
++		ts.tv_nsec = 0;
++#endif
++#endif
+ 	}
+ 	localtime_r(&ts.tv_sec, &tm_time);
+ 
+@@ -291,9 +296,16 @@ int date_main(int argc UNUSED_PARAM, cha
+ 		ts.tv_sec = validate_tm_time(date_str, &tm_time);
+ 
+ 		maybe_set_utc(opt);
++#ifdef TARGET_quectel
++		ts.tv_nsec = 0;
++#endif
+ 
+ 		/* if setting time, set it */
++#ifdef TARGET_quectel
++		if ((opt & OPT_SET) && clock_settime(CLOCK_REALTIME, &ts) < 0) {
++#else
+ 		if ((opt & OPT_SET) && stime(&ts.tv_sec) < 0) {
++#endif
+ 			bb_perror_msg("can't set date");
+ 		}
+ 	}
+Index: busybox-1_20_1/util-linux/rdate.c
+===================================================================
+--- busybox-1_20_1.orig/util-linux/rdate.c
++++ busybox-1_20_1/util-linux/rdate.c
+@@ -66,9 +66,19 @@ int rdate_main(int argc UNUSED_PARAM, ch
+ 		time(&current_time);
+ 		if (current_time == remote_time)
+ 			bb_error_msg("current time matches remote time");
++#ifdef TARGET_quectel
++		else {
++			struct timespec ts;
++			ts.tv_sec = remote_time;
++			ts.tv_nsec = 0;
++			if (clock_settime(CLOCK_REALTIME, &ts) < 0)
++				bb_perror_msg_and_die("can't set time of day");
++#else
++		}
+ 		else
+ 			if (stime(&remote_time) < 0)
+ 				bb_perror_msg_and_die("can't set time of day");
++#endif
+ 	}
+ 
+ 	if ((flags & 1) == 0)

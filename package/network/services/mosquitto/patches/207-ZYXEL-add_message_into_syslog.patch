@@ -1,0 +1,709 @@
+diff -urN mosquitto-1.6.7.orig/client/client_shared.h mosquitto-1.6.7/client/client_shared.h
+--- mosquitto-1.6.7.orig/client/client_shared.h	2020-11-07 09:00:05.637366000 +0800
++++ mosquitto-1.6.7/client/client_shared.h	2020-11-12 09:17:55.861170303 +0800
+@@ -24,6 +24,7 @@
+ #else
+ #  include <sys/time.h>
+ #endif
++#include "zcfg_debug.h"	//add for zcfg_log print on web.
+ 
+ /* pub_client.c modes */
+ #define MSGMODE_NONE 0
+diff -urN mosquitto-1.6.7.orig/client/pub_client.c mosquitto-1.6.7/client/pub_client.c
+--- mosquitto-1.6.7.orig/client/pub_client.c	2020-11-07 09:00:05.641366000 +0800
++++ mosquitto-1.6.7/client/pub_client.c	2020-11-12 09:22:12.354041082 +0800
+@@ -202,6 +202,7 @@
+ 	last_mid_sent = mid;
+ 	if(reason_code > 127){
+ 		err_printf(&cfg, "Warning: Publish %d failed: %s.\n", mid, mosquitto_reason_string(reason_code));
++		zcfgLogPrefix(ZCFG_LOG_WARNING, ZCFG_LOGPRE_MQTT, "[Warning] Publish %d failed: %s.\n", mid, mosquitto_reason_string(reason_code));
+ 	}
+ 	publish_count++;
+ 
+@@ -674,6 +675,7 @@
+ 		rc = client_connect(mosq, &cfg);
+ 		if(rc != MOSQ_ERR_SUCCESS){
+ 			printf("[MQTT PUB][CONNECTING FAIL] Sleep 5 seconds and then try to connect again.\n");
++			zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "[PUB]:Sleep 5 seconds and then try to connect again.\n");
+ 			sleep(5);
+ 			continue;
+ 		}
+diff -urN mosquitto-1.6.7.orig/lib/connect.c mosquitto-1.6.7/lib/connect.c
+--- mosquitto-1.6.7.orig/lib/connect.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/connect.c	2020-11-11 10:08:58.773891397 +0800
+@@ -90,6 +90,7 @@
+ 	if(net__socketpair(&mosq->sockpairR, &mosq->sockpairW)){
+ 		log__printf(mosq, MOSQ_LOG_WARNING,
+ 				"Warning: Unable to open socket pair, outgoing publish commands may be delayed.");
++		zcfgLogPrefix(ZCFG_LOG_WARNING, ZCFG_LOGPRE_MQTT, "[Warning] Unable to open socket pair, outgoing publish commands may be delayed.");		
+ 	}
+ 
+ 	return MOSQ_ERR_SUCCESS;
+diff -urN mosquitto-1.6.7.orig/lib/handle_auth.c mosquitto-1.6.7/lib/handle_auth.c
+--- mosquitto-1.6.7.orig/lib/handle_auth.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_auth.c	2020-11-11 10:10:05.646774341 +0800
+@@ -34,6 +34,7 @@
+ 
+ 	if(!mosq) return MOSQ_ERR_INVAL;
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received AUTH", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received AUTH", mosq->id);
+ 
+ 	if(mosq->protocol != mosq_p_mqtt5){
+ 		return MOSQ_ERR_PROTOCOL;
+diff -urN mosquitto-1.6.7.orig/lib/handle_connack.c mosquitto-1.6.7/lib/handle_connack.c
+--- mosquitto-1.6.7.orig/lib/handle_connack.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_connack.c	2020-11-11 10:05:21.873339264 +0800
+@@ -31,6 +31,7 @@
+ static void connack_callback(struct mosquitto *mosq, uint8_t reason_code, uint8_t connect_flags, const mosquitto_property *properties)
+ {
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received CONNACK (%d)", mosq->id, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received CONNACK (%d)", mosq->id, reason_code);
+ 	if(reason_code == MQTT_RC_SUCCESS){
+ 		mosq->reconnects = 0;
+ 	}
+diff -urN mosquitto-1.6.7.orig/lib/handle_disconnect.c mosquitto-1.6.7/lib/handle_disconnect.c
+--- mosquitto-1.6.7.orig/lib/handle_disconnect.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_disconnect.c	2020-11-11 10:11:17.793480664 +0800
+@@ -52,6 +52,7 @@
+ 	}
+ 
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Received DISCONNECT (%d)", reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received DISCONNECT (%d)", reason_code);
+ 
+ 	do_client_disconnect(mosq, reason_code, properties);
+ 
+diff -urN mosquitto-1.6.7.orig/lib/handle_ping.c mosquitto-1.6.7/lib/handle_ping.c
+--- mosquitto-1.6.7.orig/lib/handle_ping.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_ping.c	2020-11-11 10:13:35.740000968 +0800
+@@ -48,8 +48,10 @@
+ 
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received PINGREQ from %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received PINGREQ from %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received PINGREQ", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received PINGREQ", mosq->id);
+ #endif
+ 	return send__pingresp(mosq);
+ }
+@@ -68,8 +70,10 @@
+ 	mosq->ping_t = 0; /* No longer waiting for a PINGRESP. */
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received PINGRESP from %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received PINGRESP from %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received PINGRESP", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received PINGRESP", mosq->id);
+ #endif
+ 	return MOSQ_ERR_SUCCESS;
+ }
+diff -urN mosquitto-1.6.7.orig/lib/handle_pubackcomp.c mosquitto-1.6.7/lib/handle_pubackcomp.c
+--- mosquitto-1.6.7.orig/lib/handle_pubackcomp.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_pubackcomp.c	2020-11-11 10:15:59.506381398 +0800
+@@ -84,12 +84,14 @@
+ 	rc = db__message_delete_outgoing(db, mosq, mid, mosq_ms_wait_for_pubcomp, qos);
+ 	if(rc == MOSQ_ERR_NOT_FOUND){
+ 		log__printf(mosq, MOSQ_LOG_WARNING, "Warning: Received %s from %s for an unknown packet identifier %d.", type, mosq->id, mid);
++		zcfgLogPrefix(ZCFG_LOG_WARNING, ZCFG_LOGPRE_MQTT, "[Warning] Received %s from %s for an unknown packet identifier %d.", type, mosq->id, mid);
+ 		return MOSQ_ERR_SUCCESS;
+ 	}else{
+ 		return rc;
+ 	}
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received %s (Mid: %d, RC:%d)", mosq->id, type, mid, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received %s (Mid: %d, RC:%d)", mosq->id, type, mid, reason_code);
+ 
+ 	rc = message__delete(mosq, mid, mosq_md_out, qos);
+ 	if(rc){
+diff -urN mosquitto-1.6.7.orig/lib/handle_publish.c mosquitto-1.6.7/lib/handle_publish.c
+--- mosquitto-1.6.7.orig/lib/handle_publish.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_publish.c	2020-11-11 10:18:29.677616175 +0800
+@@ -110,11 +110,15 @@
+ 		}
+ 	}
+ 	log__printf(mosq, MOSQ_LOG_DEBUG,
+-			"Client %s received PUBLISH (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))",
++			"Client %s received PUBLISH (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))",	
++			mosq->id, message->dup, message->msg.qos, message->msg.retain,
++			message->msg.mid, message->msg.topic,
++			(long)message->msg.payloadlen);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, 
++			"Client %s received PUBLISH (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))",	
+ 			mosq->id, message->dup, message->msg.qos, message->msg.retain,
+ 			message->msg.mid, message->msg.topic,
+ 			(long)message->msg.payloadlen);
+-
+ 	message->timestamp = mosquitto_time();
+ 	switch(message->msg.qos){
+ 		case 0:
+diff -urN mosquitto-1.6.7.orig/lib/handle_pubrec.c mosquitto-1.6.7/lib/handle_pubrec.c
+--- mosquitto-1.6.7.orig/lib/handle_pubrec.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_pubrec.c	2020-11-11 10:20:19.910543074 +0800
+@@ -68,7 +68,8 @@
+ 
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received PUBREC from %s (Mid: %d)", mosq->id, mid);
+-
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received PUBREC from %s (Mid: %d)", mosq->id, mid);
++	
+ 	if(reason_code < 0x80){
+ 		rc = db__message_update_outgoing(mosq, mid, mosq_ms_wait_for_pubcomp, 2);
+ 	}else{
+@@ -78,6 +79,7 @@
+ 	UNUSED(db);
+ 
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received PUBREC (Mid: %d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received PUBREC (Mid: %d)", mosq->id, mid);
+ 
+ 	if(reason_code < 0x80 || mosq->protocol != mosq_p_mqtt5){
+ 		rc = message__out_update(mosq, mid, mosq_ms_wait_for_pubcomp, 2);
+@@ -101,6 +103,7 @@
+ #endif
+ 	if(rc == MOSQ_ERR_NOT_FOUND){
+ 		log__printf(mosq, MOSQ_LOG_WARNING, "Warning: Received PUBREC from %s for an unknown packet identifier %d.", mosq->id, mid);
++		zcfgLogPrefix(ZCFG_LOG_WARNING, ZCFG_LOGPRE_MQTT, "[Warning] Received PUBREC from %s for an unknown packet identifier %d.", mosq->id, mid);
+ 	}else if(rc != MOSQ_ERR_SUCCESS){
+ 		return rc;
+ 	}
+diff -urN mosquitto-1.6.7.orig/lib/handle_pubrel.c mosquitto-1.6.7/lib/handle_pubrel.c
+--- mosquitto-1.6.7.orig/lib/handle_pubrel.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_pubrel.c	2020-11-11 10:21:12.953244048 +0800
+@@ -75,6 +75,7 @@
+ 
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received PUBREL from %s (Mid: %d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received PUBREL from %s (Mid: %d)", mosq->id, mid);
+ 
+ 	/* Immediately free, we don't do anything with Reason String or User Property at the moment */
+ 	mosquitto_property_free_all(&properties);
+@@ -93,6 +94,7 @@
+ 	UNUSED(db);
+ 
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received PUBREL (Mid: %d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received PUBREL (Mid: %d)", mosq->id, mid);
+ 
+ 	rc = send__pubcomp(mosq, mid);
+ 	if(rc){
+diff -urN mosquitto-1.6.7.orig/lib/handle_suback.c mosquitto-1.6.7/lib/handle_suback.c
+--- mosquitto-1.6.7.orig/lib/handle_suback.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_suback.c	2020-11-11 10:22:07.160048372 +0800
+@@ -52,8 +52,10 @@
+ 
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received SUBACK from %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received SUBACK from %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received SUBACK", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received SUBACK", mosq->id);
+ #endif
+ 	rc = packet__read_uint16(&mosq->in_packet, &mid);
+ 	if(rc) return rc;
+diff -urN mosquitto-1.6.7.orig/lib/handle_unsuback.c mosquitto-1.6.7/lib/handle_unsuback.c
+--- mosquitto-1.6.7.orig/lib/handle_unsuback.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/handle_unsuback.c	2020-11-11 10:22:54.173761594 +0800
+@@ -53,8 +53,10 @@
+ 
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Received UNSUBACK from %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Received UNSUBACK from %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s received UNSUBACK", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s received UNSUBACK", mosq->id);
+ #endif
+ 	rc = packet__read_uint16(&mosq->in_packet, &mid);
+ 	if(rc) return rc;
+diff -urN mosquitto-1.6.7.orig/lib/logging_mosq.h mosquitto-1.6.7/lib/logging_mosq.h
+--- mosquitto-1.6.7.orig/lib/logging_mosq.h	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/logging_mosq.h	2020-11-11 09:21:35.806305300 +0800
+@@ -17,6 +17,7 @@
+ #define LOGGING_MOSQ_H
+ 
+ #include "mosquitto.h"
++#include "zcfg_debug.h"	//add for zcfg_log print on web.
+ 
+ int log__printf(struct mosquitto *mosq, int priority, const char *fmt, ...);
+ 
+diff -urN mosquitto-1.6.7.orig/lib/net_mosq.c mosquitto-1.6.7/lib/net_mosq.c
+--- mosquitto-1.6.7.orig/lib/net_mosq.c	2020-11-07 09:00:05.633366000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.c	2020-11-11 10:32:24.837484183 +0800
+@@ -520,6 +520,7 @@
+ 	e = ERR_get_error();
+ 	while(e){
+ 		log__printf(mosq, MOSQ_LOG_ERR, "OpenSSL Error: %s", ERR_error_string(e, ebuf));
++		zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "OpenSSL Error: %s", ERR_error_string(e, ebuf));
+ 		e = ERR_get_error();
+ 	}
+ }
+@@ -535,14 +536,17 @@
+ 		// Note: OCSP is available in all currently supported OpenSSL versions.
+ 		if ((res=SSL_set_tlsext_status_type(mosq->ssl, TLSEXT_STATUSTYPE_ocsp)) != 1) {
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Could not activate OCSP (error: %ld)", res);
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Could not activate OCSP (error: %ld)", res);
+ 			return MOSQ_ERR_OCSP;
+ 		}
+ 		if ((res=SSL_CTX_set_tlsext_status_cb(mosq->ssl_ctx, mosquitto__verify_ocsp_status_cb)) != 1) {
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Could not activate OCSP (error: %ld)", res);
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Could not activate OCSP (error: %ld)", res);
+ 			return MOSQ_ERR_OCSP;
+ 		}
+ 		if ((res=SSL_CTX_set_tlsext_status_arg(mosq->ssl_ctx, mosq)) != 1) {
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Could not activate OCSP (error: %ld)", res);
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Could not activate OCSP (error: %ld)", res);
+ 			return MOSQ_ERR_OCSP;
+ 		}
+ 	}
+@@ -589,6 +593,7 @@
+ 			return MOSQ_ERR_SUCCESS;
+ 		}else if(!mosq->tls_cafile && !mosq->tls_capath && !mosq->tls_psk){
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Error: MOSQ_OPT_SSL_CTX_WITH_DEFAULTS used without specifying cafile, capath or psk.");
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: MOSQ_OPT_SSL_CTX_WITH_DEFAULTS used without specifying cafile, capath or psk.");
+ 			return MOSQ_ERR_INVAL;
+ 		}
+ 	}
+@@ -606,6 +611,7 @@
+ 
+ 			if(!mosq->ssl_ctx){
+ 				log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to create TLS context.");
++				zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to create TLS context.");
+ 				COMPAT_CLOSE(mosq->sock);
+ 				mosq->sock = INVALID_SOCKET;
+ 				net__print_ssl_error(mosq);
+@@ -630,6 +636,7 @@
+ #endif
+ 		}else{
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Protocol %s not supported.", mosq->tls_version);
+ 			COMPAT_CLOSE(mosq->sock);
+ 			mosq->sock = INVALID_SOCKET;
+ 			return MOSQ_ERR_INVAL;
+@@ -656,12 +663,14 @@
+ 			engine = ENGINE_by_id(mosq->tls_engine);
+ 			if(!engine){
+ 				log__printf(mosq, MOSQ_LOG_ERR, "Error loading %s engine\n", mosq->tls_engine);
++				zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error loading %s engine\n", mosq->tls_engine);
+ 				COMPAT_CLOSE(mosq->sock);
+ 				mosq->sock = INVALID_SOCKET;
+ 				return MOSQ_ERR_TLS;
+ 			}
+ 			if(!ENGINE_init(engine)){
+ 				log__printf(mosq, MOSQ_LOG_ERR, "Failed engine initialisation\n");
++				zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Failed engine initialisation\n");
+ 				ENGINE_free(engine);
+ 				COMPAT_CLOSE(mosq->sock);
+ 				mosq->sock = INVALID_SOCKET;
+@@ -676,6 +685,7 @@
+ 			ret = SSL_CTX_set_cipher_list(mosq->ssl_ctx, mosq->tls_ciphers);
+ 			if(ret == 0){
+ 				log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set TLS ciphers. Check cipher list \"%s\".", mosq->tls_ciphers);
++				zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to set TLS ciphers. Check cipher list \"%s\".", mosq->tls_ciphers);
+ #if !defined(OPENSSL_NO_ENGINE)
+ 				ENGINE_FINISH(engine);
+ #endif
+@@ -691,18 +701,24 @@
+ #ifdef WITH_BROKER
+ 				if(mosq->tls_cafile && mosq->tls_capath){
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check bridge_cafile \"%s\" and bridge_capath \"%s\".", mosq->tls_cafile, mosq->tls_capath);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check bridge_cafile \"%s\" and bridge_capath \"%s\".", mosq->tls_cafile, mosq->tls_capath);
+ 				}else if(mosq->tls_cafile){
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check bridge_cafile \"%s\".", mosq->tls_cafile);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check bridge_cafile \"%s\".", mosq->tls_cafile);
+ 				}else{
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check bridge_capath \"%s\".", mosq->tls_capath);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check bridge_capath \"%s\".", mosq->tls_capath);
+ 				}
+ #else
+ 				if(mosq->tls_cafile && mosq->tls_capath){
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check cafile \"%s\" and capath \"%s\".", mosq->tls_cafile, mosq->tls_capath);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check cafile \"%s\" and capath \"%s\".", mosq->tls_cafile, mosq->tls_capath);
+ 				}else if(mosq->tls_cafile){
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check cafile \"%s\".", mosq->tls_cafile);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check cafile \"%s\".", mosq->tls_cafile);
+ 				}else{
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check capath \"%s\".", mosq->tls_capath);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load CA certificates, check capath \"%s\".", mosq->tls_capath);
+ 				}
+ #endif
+ #if !defined(OPENSSL_NO_ENGINE)
+@@ -729,8 +745,10 @@
+ 				if(ret != 1){
+ #ifdef WITH_BROKER
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client certificate, check bridge_certfile \"%s\".", mosq->tls_certfile);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load client certificate, check bridge_certfile \"%s\".", mosq->tls_certfile);
+ #else
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client certificate \"%s\".", mosq->tls_certfile);
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load client certificate \"%s\".", mosq->tls_certfile);
+ #endif
+ #if !defined(OPENSSL_NO_ENGINE)
+ 					ENGINE_FINISH(engine);
+@@ -748,6 +766,7 @@
+ 					if(mosq->tls_engine_kpass_sha1){
+ 						if(!ENGINE_ctrl_cmd(engine, ENGINE_SECRET_MODE, ENGINE_SECRET_MODE_SHA, NULL, NULL, 0)){
+ 							log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set engine secret mode sha1");
++							zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to set engine secret mode sha1");
+ 							ENGINE_FINISH(engine);
+ 							COMPAT_CLOSE(mosq->sock);
+ 							mosq->sock = INVALID_SOCKET;
+@@ -756,6 +775,7 @@
+ 						}
+ 						if(!ENGINE_ctrl_cmd(engine, ENGINE_PIN, 0, mosq->tls_engine_kpass_sha1, NULL, 0)){
+ 							log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set engine pin");
++							zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to set engine pin");
+ 							ENGINE_FINISH(engine);
+ 							COMPAT_CLOSE(mosq->sock);
+ 							mosq->sock = INVALID_SOCKET;
+@@ -767,6 +787,7 @@
+ 					EVP_PKEY *pkey = ENGINE_load_private_key(engine, mosq->tls_keyfile, ui_method, NULL);
+ 					if(!pkey){
+ 						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load engine private key file \"%s\".", mosq->tls_keyfile);
++						zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load engine private key file \"%s\".", mosq->tls_keyfile);
+ 						ENGINE_FINISH(engine);
+ 						COMPAT_CLOSE(mosq->sock);
+ 						mosq->sock = INVALID_SOCKET;
+@@ -775,6 +796,7 @@
+ 					}
+ 					if(SSL_CTX_use_PrivateKey(mosq->ssl_ctx, pkey) <= 0){
+ 						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to use engine private key file \"%s\".", mosq->tls_keyfile);
++						zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to use engine private key file \"%s\".", mosq->tls_keyfile);
+ 						ENGINE_FINISH(engine);
+ 						COMPAT_CLOSE(mosq->sock);
+ 						mosq->sock = INVALID_SOCKET;
+@@ -787,8 +809,10 @@
+ 					if(ret != 1){
+ #ifdef WITH_BROKER
+ 						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file, check bridge_keyfile \"%s\".", mosq->tls_keyfile);
++						zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load client key file, check bridge_keyfile \"%s\".", mosq->tls_keyfile);
+ #else
+ 						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file \"%s\".", mosq->tls_keyfile);
++						zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unable to load client key file \"%s\".", mosq->tls_keyfile);
+ #endif
+ #if !defined(OPENSSL_NO_ENGINE)
+ 						ENGINE_FINISH(engine);
+@@ -802,6 +826,7 @@
+ 				ret = SSL_CTX_check_private_key(mosq->ssl_ctx);
+ 				if(ret != 1){
+ 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Client certificate/key are inconsistent.");
++					zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Client certificate/key are inconsistent.");
+ #if !defined(OPENSSL_NO_ENGINE)
+ 					ENGINE_FINISH(engine);
+ #endif
+diff -urN mosquitto-1.6.7.orig/lib/net_mosq_ocsp.c mosquitto-1.6.7/lib/net_mosq_ocsp.c
+--- mosquitto-1.6.7.orig/lib/net_mosq_ocsp.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/net_mosq_ocsp.c	2020-11-11 10:36:04.098714530 +0800
+@@ -63,12 +63,14 @@
+ 
+ 	long len = SSL_get_tlsext_status_ocsp_resp(mosq->ssl, &p);
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: SSL_get_tlsext_status_ocsp_resp returned %ld bytes", len);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: SSL_get_tlsext_status_ocsp_resp returned %ld bytes", len);
+ 
+ 	// the following functions expect a const pointer
+ 	cp = (const unsigned char *)p;
+ 
+ 	if (!cp || len <= 0) {
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: no response");
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: no response");
+ 		goto end;
+ 	}
+ 
+@@ -76,6 +78,7 @@
+ 	rsp = d2i_OCSP_RESPONSE(NULL, &cp, len);
+ 	if (rsp==NULL) {
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: invalid response");
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: invalid response");
+ 		goto end;
+ 	}
+ 
+@@ -83,18 +86,22 @@
+ 	if(ocsp_status != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: invalid status: %s (%d)",
+ 			       OCSP_response_status_str(ocsp_status), ocsp_status);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: invalid status: %s (%d)",
++			       OCSP_response_status_str(ocsp_status), ocsp_status);		   
+ 		goto end;
+ 	}
+ 
+ 	br = OCSP_response_get1_basic(rsp);
+ 	if (!br) {
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: invalid response");
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: invalid response");
+ 		goto end;
+ 	}
+ 
+ 	ch = SSL_get_peer_cert_chain(mosq->ssl);
+ 	if (sk_X509_num(ch) <= 0) {
+ 		log__printf(mosq, MOSQ_LOG_ERR, "OCSP: we did not receive certificates of the server (num: %d)", sk_X509_num(ch));
++		zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "OCSP: we did not receive certificates of the server (num: %d)", sk_X509_num(ch));
+ 		goto end;
+ 	}
+ 
+@@ -106,6 +113,7 @@
+ 
+ 	if ((result2=OCSP_basic_verify(br, ch, st, 0)) <= 0) {
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: response verification failed (error: %d)", result2);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: response verification failed (error: %d)", result2);
+ 		goto end;
+ 	}
+ 
+@@ -129,6 +137,7 @@
+ 				// Note: A OCSP stapling result will be accepted up to 5 minutes after it expired!
+ 				if(!OCSP_check_validity(thisupd, nextupd, 300L, -1L)) {
+ 					log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: OCSP response has expired");
++					zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: OCSP response has expired");
+ 					goto end;
+ 				}
+ 				break;
+@@ -136,6 +145,8 @@
+ 			case V_OCSP_CERTSTATUS_REVOKED:
+ 				log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: SSL certificate revocation reason: %s (%d)",
+ 					OCSP_crl_reason_str(crl_reason), crl_reason);
++				zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: SSL certificate revocation reason: %s (%d)",
++					OCSP_crl_reason_str(crl_reason), crl_reason);	
+ 				goto end;
+ 
+ 			case V_OCSP_CERTSTATUS_UNKNOWN:
+@@ -143,6 +154,7 @@
+ 
+ 			default:
+ 				log__printf(mosq, MOSQ_LOG_DEBUG, "OCSP: SSL certificate revocation status unknown");
++				zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "OCSP: SSL certificate revocation status unknown");
+ 				goto end;
+ 		}
+ 	}
+diff -urN mosquitto-1.6.7.orig/lib/packet_mosq.c mosquitto-1.6.7/lib/packet_mosq.c
+--- mosquitto-1.6.7.orig/lib/packet_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/packet_mosq.c	2020-11-11 10:37:16.281970306 +0800
+@@ -427,6 +427,7 @@
+ #ifdef WITH_BROKER
+ 		if(db->config->max_packet_size > 0 && mosq->in_packet.remaining_length+1 > db->config->max_packet_size){
+ 			log__printf(NULL, MOSQ_LOG_INFO, "Client %s sent too large packet %d, disconnecting.", mosq->id, mosq->in_packet.remaining_length+1);
++			zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sent too large packet %d, disconnecting.", mosq->id, mosq->in_packet.remaining_length+1);
+ 			if(mosq->protocol == mosq_p_mqtt5){
+ 				send__disconnect(mosq, MQTT_RC_PACKET_TOO_LARGE, NULL);
+ 			}
+diff -urN mosquitto-1.6.7.orig/lib/read_handle.c mosquitto-1.6.7/lib/read_handle.c
+--- mosquitto-1.6.7.orig/lib/read_handle.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/read_handle.c	2020-11-11 10:38:22.610469214 +0800
+@@ -64,6 +64,7 @@
+ 		default:
+ 			/* If we don't recognise the command, return an error straight away. */
+ 			log__printf(mosq, MOSQ_LOG_ERR, "Error: Unrecognised command %d\n", (mosq->in_packet.command)&0xF0);
++			zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: Unrecognised command %d\n", (mosq->in_packet.command)&0xF0);
+ 			return MOSQ_ERR_PROTOCOL;
+ 	}
+ }
+diff -urN mosquitto-1.6.7.orig/lib/send_connect.c mosquitto-1.6.7/lib/send_connect.c
+--- mosquitto-1.6.7.orig/lib/send_connect.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_connect.c	2020-11-11 10:05:17.673466644 +0800
+@@ -196,9 +196,11 @@
+ #ifdef WITH_BROKER
+ # ifdef WITH_BRIDGE
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Bridge %s sending CONNECT", clientid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Bridge %s sending CONNECT", clientid);
+ # endif
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending CONNECT", clientid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending CONNECT", clientid);
+ #endif
+ 	return packet__queue(mosq, packet);
+ }
+diff -urN mosquitto-1.6.7.orig/lib/send_disconnect.c mosquitto-1.6.7/lib/send_disconnect.c
+--- mosquitto-1.6.7.orig/lib/send_disconnect.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_disconnect.c	2020-11-11 10:39:53.174174195 +0800
+@@ -43,14 +43,17 @@
+ #  ifdef WITH_BRIDGE
+ 	if(mosq->bridge){
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "Bridge %s sending DISCONNECT", mosq->id);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Bridge %s sending DISCONNECT", mosq->id);
+ 	}else
+ #  else
+ 	{
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "Sending DISCONNECT to %s (rc%d)", mosq->id, reason_code);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending DISCONNECT to %s (rc%d)", mosq->id, reason_code);
+ 	}
+ #  endif
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending DISCONNECT", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending DISCONNECT", mosq->id);
+ #endif
+ 	assert(mosq);
+ 	packet = mosquitto__calloc(1, sizeof(struct mosquitto__packet));
+diff -urN mosquitto-1.6.7.orig/lib/send_mosq.c mosquitto-1.6.7/lib/send_mosq.c
+--- mosquitto-1.6.7.orig/lib/send_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_mosq.c	2020-11-11 10:44:09.799884580 +0800
+@@ -45,8 +45,10 @@
+ 	assert(mosq);
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PINGREQ to %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PINGREQ to %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PINGREQ", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PINGREQ", mosq->id);
+ #endif
+ 	rc = send__simple_command(mosq, CMD_PINGREQ);
+ 	if(rc == MOSQ_ERR_SUCCESS){
+@@ -59,8 +61,10 @@
+ {
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PINGRESP to %s", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PINGRESP to %s", mosq->id);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PINGRESP", mosq->id);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PINGRESP", mosq->id);
+ #endif
+ 	return send__simple_command(mosq, CMD_PINGRESP);
+ }
+@@ -69,8 +73,10 @@
+ {
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBACK to %s (m%d, rc%d)", mosq->id, mid, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBACK to %s (m%d, rc%d)", mosq->id, mid, reason_code);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PUBACK (m%d, rc%d)", mosq->id, mid, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PUBACK (m%d, rc%d)", mosq->id, mid, reason_code);
+ #endif
+ 	util__increment_receive_quota(mosq);
+ 	/* We don't use Reason String or User Property yet. */
+@@ -81,8 +87,10 @@
+ {
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBCOMP to %s (m%d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBCOMP to %s (m%d)", mosq->id, mid);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PUBCOMP (m%d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PUBCOMP (m%d)", mosq->id, mid);
+ #endif
+ 	util__increment_receive_quota(mosq);
+ 	/* We don't use Reason String or User Property yet. */
+@@ -94,8 +102,10 @@
+ {
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBREC to %s (m%d, rc%d)", mosq->id, mid, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBREC to %s (m%d, rc%d)", mosq->id, mid, reason_code);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PUBREC (m%d, rc%d)", mosq->id, mid, reason_code);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PUBREC (m%d, rc%d)", mosq->id, mid, reason_code);
+ #endif
+ 	if(reason_code >= 0x80 && mosq->protocol == mosq_p_mqtt5){
+ 		util__increment_receive_quota(mosq);
+@@ -108,8 +118,10 @@
+ {
+ #ifdef WITH_BROKER
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBREL to %s (m%d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBREL to %s (m%d)", mosq->id, mid);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PUBREL (m%d)", mosq->id, mid);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PUBREL (m%d)", mosq->id, mid);
+ #endif
+ 	/* We don't use Reason String or User Property yet. */
+ 	return send__command_with_mid(mosq, CMD_PUBREL|2, mid, false, 0, NULL);
+diff -urN mosquitto-1.6.7.orig/lib/send_publish.c mosquitto-1.6.7/lib/send_publish.c
+--- mosquitto-1.6.7.orig/lib/send_publish.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_publish.c	2020-11-11 10:47:19.441163182 +0800
+@@ -109,6 +109,7 @@
+ 						mapped_topic = topic_temp;
+ 					}
+ 					log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBLISH to %s (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, mapped_topic, (long)payloadlen);
++					zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBLISH to %s (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, mapped_topic, (long)payloadlen);
+ 					G_PUB_BYTES_SENT_INC(payloadlen);
+ 					rc =  send__real_publish(mosq, mid, mapped_topic, payloadlen, payload, qos, retain, dup, cmsg_props, store_props, expiry_interval);
+ 					mosquitto__free(mapped_topic);
+@@ -119,9 +120,11 @@
+ 	}
+ #endif
+ 	log__printf(NULL, MOSQ_LOG_DEBUG, "Sending PUBLISH to %s (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, topic, (long)payloadlen);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Sending PUBLISH to %s (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, topic, (long)payloadlen);
+ 	G_PUB_BYTES_SENT_INC(payloadlen);
+ #else
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending PUBLISH (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, topic, (long)payloadlen);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending PUBLISH (d%d, q%d, r%d, m%d, '%s', ... (%ld bytes))", mosq->id, dup, qos, retain, mid, topic, (long)payloadlen);
+ #endif
+ 
+ 	return send__real_publish(mosq, mid, topic, payloadlen, payload, qos, retain, dup, cmsg_props, store_props, expiry_interval);
+@@ -170,8 +173,10 @@
+ 	if(packet__check_oversize(mosq, packetlen)){
+ #ifdef WITH_BROKER
+ 		log__printf(NULL, MOSQ_LOG_NOTICE, "Dropping too large outgoing PUBLISH for %s (%d bytes)", mosq->id, packetlen);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Dropping too large outgoing PUBLISH for %s (%d bytes)", mosq->id, packetlen);
+ #else
+ 		log__printf(NULL, MOSQ_LOG_NOTICE, "Dropping too large outgoing PUBLISH (%d bytes)", packetlen);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Dropping too large outgoing PUBLISH (%d bytes)", packetlen);
+ #endif
+ 		return MOSQ_ERR_OVERSIZE_PACKET;
+ 	}
+diff -urN mosquitto-1.6.7.orig/lib/send_subscribe.c mosquitto-1.6.7/lib/send_subscribe.c
+--- mosquitto-1.6.7.orig/lib/send_subscribe.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_subscribe.c	2020-11-11 10:48:38.775166718 +0800
+@@ -84,10 +84,12 @@
+ #ifdef WITH_BROKER
+ # ifdef WITH_BRIDGE
+ 	log__printf(mosq, MOSQ_LOG_DEBUG, "Bridge %s sending SUBSCRIBE (Mid: %d, Topic: %s, QoS: %d, Options: 0x%02x)", mosq->id, local_mid, topic[0], topic_qos&0x03, topic_qos&0xFC);
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Bridge %s sending SUBSCRIBE (Mid: %d, Topic: %s, QoS: %d, Options: 0x%02x)", mosq->id, local_mid, topic[0], topic_qos&0x03, topic_qos&0xFC);
+ # endif
+ #else
+ 	for(i=0; i<topic_count; i++){
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending SUBSCRIBE (Mid: %d, Topic: %s, QoS: %d, Options: 0x%02x)", mosq->id, local_mid, topic[i], topic_qos&0x03, topic_qos&0xFC);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending SUBSCRIBE (Mid: %d, Topic: %s, QoS: %d, Options: 0x%02x)", mosq->id, local_mid, topic[i], topic_qos&0x03, topic_qos&0xFC);
+ 	}
+ #endif
+ 
+diff -urN mosquitto-1.6.7.orig/lib/send_unsubscribe.c mosquitto-1.6.7/lib/send_unsubscribe.c
+--- mosquitto-1.6.7.orig/lib/send_unsubscribe.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/send_unsubscribe.c	2020-11-11 10:50:26.436640622 +0800
+@@ -87,11 +87,13 @@
+ # ifdef WITH_BRIDGE
+ 	for(i=0; i<topic_count; i++){
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "Bridge %s sending UNSUBSCRIBE (Mid: %d, Topic: %s)", mosq->id, local_mid, topic[i]);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Bridge %s sending UNSUBSCRIBE (Mid: %d, Topic: %s)", mosq->id, local_mid, topic[i]);
+ 	}
+ # endif
+ #else
+ 	for(i=0; i<topic_count; i++){
+ 		log__printf(mosq, MOSQ_LOG_DEBUG, "Client %s sending UNSUBSCRIBE (Mid: %d, Topic: %s)", mosq->id, local_mid, topic[i]);
++		zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "Client %s sending UNSUBSCRIBE (Mid: %d, Topic: %s)", mosq->id, local_mid, topic[i]);
+ 	}
+ #endif
+ 	return packet__queue(mosq, packet);
+diff -urN mosquitto-1.6.7.orig/lib/srv_mosq.c mosquitto-1.6.7/lib/srv_mosq.c
+--- mosquitto-1.6.7.orig/lib/srv_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/srv_mosq.c	2020-11-11 10:58:04.430370186 +0800
+@@ -43,6 +43,7 @@
+ 		}
+ 	}else{
+ 		log__printf(mosq, MOSQ_LOG_ERR, "Error: SRV lookup failed (%d).", status);
++		zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: SRV lookup failed (%d).", status);
+ 		/* FIXME - calling on_disconnect here isn't correct. */
+ 		pthread_mutex_lock(&mosq->callback_mutex);
+ 		if(mosq->on_disconnect){
+diff -urN mosquitto-1.6.7.orig/lib/tls_mosq.c mosquitto-1.6.7/lib/tls_mosq.c
+--- mosquitto-1.6.7.orig/lib/tls_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/tls_mosq.c	2020-11-11 10:59:11.392683868 +0800
+@@ -68,6 +68,7 @@
+ #endif
+ 			if (preverify_ok != 1) {
+ 				log__printf(mosq, MOSQ_LOG_ERR, "Error: host name verification failed.");
++				zcfgLogPrefix(ZCFG_LOG_ERR, ZCFG_LOGPRE_MQTT, "Error: host name verification failed.");
+ 			}
+ 			return preverify_ok;
+ 		}else{
+diff -urN mosquitto-1.6.7.orig/lib/util_mosq.c mosquitto-1.6.7/lib/util_mosq.c
+--- mosquitto-1.6.7.orig/lib/util_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/lib/util_mosq.c	2020-11-11 11:00:12.100358238 +0800
+@@ -78,6 +78,7 @@
+ 				&& now - mosq->next_msg_out - mosq->keepalive >= mosq->bridge->idle_timeout){
+ 
+ 		log__printf(NULL, MOSQ_LOG_NOTICE, "Bridge connection %s has exceeded idle timeout, disconnecting.", mosq->id);
++		zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_MQTT, "Bridge connection %s has exceeded idle timeout, disconnecting.", mosq->id);
+ 		net__socket_close(db, mosq);
+ 		return MOSQ_ERR_SUCCESS;
+ 	}
+diff -urN mosquitto-1.6.7.orig/src/mosquitto_broker_internal.h mosquitto-1.6.7/src/mosquitto_broker_internal.h
+--- mosquitto-1.6.7.orig/src/mosquitto_broker_internal.h	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/src/mosquitto_broker_internal.h	2020-11-11 09:19:30.130305300 +0800
+@@ -55,6 +55,8 @@
+ #define uhpa_free(ptr) mosquitto__free(ptr)
+ #include "uhpa.h"
+ 
++#include "zcfg_debug.h"	//add for zcfg_log print on web.
++
+ #ifndef __GNUC__
+ #define __attribute__(attrib)
+ #endif

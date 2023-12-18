@@ -1,0 +1,121 @@
+--- a/zcfg_fe_rdm_access.c
++++ b/zcfg_fe_rdm_access.c
+@@ -583,3 +583,89 @@ int zcfgFeArrayLengthGetByName(char* tr1
+ 	return len;
+ }
+ 
++/*obuspa support*/
++bool tr369_get_boot_info(tr369_boot_info_t *info)
++{
++	bool ret = true;
++	FILE *fp = NULL;
++	char *strtmp[MAX_INFO_STR] = {0};
++
++
++	fp = fopen(TR369_BOOT_INFO, "r");
++	if (fp) {
++		if(!feof(fp)) {
++			tr369_strget(info->cause, fp);
++		}
++		else {
++			strcpy(info->cause,"");
++		}
++
++		if(!feof(fp)) {
++			tr369_strget(info->command_key, fp);
++		}
++		else {
++			strcpy(info->command_key,"");
++		}
++			
++		if(!feof(fp)) {
++			tr369_strget(info->last_software_version, fp);
++		}
++		else {
++			strcpy(info->last_software_version,"");
++		}
++		
++		if(!feof(fp)) {
++			char request_instance[MAX_INFO_STR];
++			tr369_strget(request_instance, fp);
++			info->request_instance = atoi(request_instance);
++		}
++		else {
++			info->request_instance = -1;
++		}
++		// printf("[%s][%d] cause(%s), command_key(%s), last_software_version(%s), request_instance(%d)\n" \
++		// 	, __FUNCTION__, __LINE__, info->cause, info->command_key, info->last_software_version, info->request_instance);
++
++		if(!strcmp(info->cause,"")){
++			strcpy(info->cause, "LocalReboot");
++		}
++		fclose(fp);
++	}
++	else {
++		strcpy(info->cause, "LocalFactoryReset");
++		strcpy(info->command_key,"");
++		strcpy(info->last_software_version,"");
++		info->request_instance = -1;
++	}
++	return ret;
++}
++
++bool tr369_set_boot_info(tr369_boot_info_t info)
++{
++	bool ret = false;
++	FILE *fp = NULL;
++	// printf("[%s][%d] cause(%s), command_key(%s), last_software_version(%s), request_instance(%d)\n" \
++	// 	, __FUNCTION__, __LINE__, info.cause, info.command_key, info.last_software_version, info.request_instance);
++	fp = fopen(TR369_BOOT_INFO, "w");
++	if (fp) {
++		fprintf(fp, "%s\n", info.cause);
++		fprintf(fp, "%s\n", info.command_key);
++		fprintf(fp, "%s\n", info.last_software_version);
++		fprintf(fp, "%d\n", info.request_instance);
++		fclose(fp);
++		ret = true;
++		system("sync");
++	}
++
++	return ret;
++}
++
++bool tr369_set_local_factory_reset_boot_info()
++{
++	tr369_boot_info_t info;
++	tr369_get_boot_info(&info);
++	memset(info.cause, 0, sizeof(info.cause));
++    strcpy(info.cause, "LocalFactoryReset");
++
++	return tr369_set_boot_info(info);
++}
++/*End of obuspa support*/
+\ No newline at end of file
+--- a/zcfg_fe_rdm_access.h
++++ b/zcfg_fe_rdm_access.h
+@@ -57,6 +57,25 @@ zcfgRet_t zcfgFe181To98ObjMappingNameGet
+ 
+ /*End of TR98 support*/
+ 
++/*obuspa support*/
++#define TR369_BOOT_INFO "/data/tr369_bootinfo.dat"
++#define tr369_strget(product_name, fp_tmp) fgets(product_name, sizeof(product_name), fp_tmp); product_name[strlen(product_name) - 1] = (product_name[strlen(product_name) - 1] == '\n') ? '\0' : product_name[strlen(product_name) - 1];
++#define MAX_INFO_STR 256
++//------------------------------------------------------------------------------
++// Structure containing cause of last boot cycle
++typedef struct
++{
++    char cause[MAX_INFO_STR];                     // cause of the last reboot
++    char command_key[MAX_INFO_STR];               // command_key associated with the last reboot
++    char last_software_version[MAX_INFO_STR];     // Software version before the current boot period
++    int request_instance;            // Instance number of the request that initiated the reboot, or INVALID if reboot was not initiated by an operation
++} tr369_boot_info_t;
++
++bool tr369_get_boot_info(tr369_boot_info_t *info);
++bool tr369_set_boot_info(tr369_boot_info_t info);
++bool tr369_set_local_factory_reset_boot_info();
++/*End of obuspa support*/
++
+ int zcfgFeObjMaxLenGet(zcfg_offset_t rdmObjId);
+ int zcfgFeArrayLengthGetByName(char* tr181path);
+ 

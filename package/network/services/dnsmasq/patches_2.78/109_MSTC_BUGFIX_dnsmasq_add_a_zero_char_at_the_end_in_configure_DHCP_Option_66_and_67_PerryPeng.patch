@@ -1,0 +1,46 @@
+--- a/src/rfc2131.c
++++ b/src/rfc2131.c
+@@ -2496,14 +2496,12 @@ static void do_options(struct dhcp_conte
+   /* See if we can send the boot stuff as options.
+      To do this we need a requested option list, BOOTP
+      and very old DHCP clients won't have this, we also 
+-     provide an manual option to disable it.
+-     Some PXE ROMs have bugs (surprise!) and need zero-terminated 
+-     names, so we always send those.  */
++     provide an manual option to disable it.  */
+   if ((boot = find_boot(tagif))) {
+     if (boot->sname) {
+       if (!option_bool(OPT_NO_OVERRIDE) &&
+           req_options && in_list(req_options, OPTION_SNAME))
+-        option_put_string(mess, end, OPTION_SNAME, boot->sname, 1);
++        option_put_string(mess, end, OPTION_SNAME, boot->sname, null_term);
+       else
+         strncpy((char *) mess->sname, boot->sname, sizeof(mess->sname) - 1);
+     }
+@@ -2511,7 +2509,7 @@ static void do_options(struct dhcp_conte
+     if (boot->file) {
+       if (!option_bool(OPT_NO_OVERRIDE) &&
+           req_options && in_list(req_options, OPTION_FILENAME))
+-        option_put_string(mess, end, OPTION_FILENAME, boot->file, 1);
++        option_put_string(mess, end, OPTION_FILENAME, boot->file, null_term);
+       else
+         strncpy((char *) mess->file, boot->file, sizeof(mess->file) - 1);
+     }
+@@ -2709,15 +2707,10 @@ static void do_options(struct dhcp_conte
+     if (pxe_arch != -1 && optno == OPTION_VENDOR_ID)
+       continue;
+ 
+-    /* always force null-term for filename and servername - buggy PXE again. */
+-    len = do_opt(opt, NULL, context,
+-                 (optno == OPTION_SNAME
+-                  || optno == OPTION_FILENAME) ? 1 : null_term);
++    len = do_opt(opt, NULL, context, null_term);
+ 
+     if ((p = free_space(mess, end, optno, len))) {
+-      do_opt(opt, p, context,
+-             (optno == OPTION_SNAME
+-              || optno == OPTION_FILENAME) ? 1 : null_term);
++      do_opt(opt, p, context, null_term);
+ 
+       /* If we send a vendor-id, revisit which vendor-ops we consider
+          it appropriate to send. */

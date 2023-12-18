@@ -1,0 +1,548 @@
+CURRENT_DIR = $(shell pwd)
+COMMON_ZCFG_INCLUDE_DIR = $(CURRENT_DIR)/../../../private/apps/zcfg/include
+LIB_PATH = -L$(USRLIBDIR) -L$(INSTALL_DIR)/lib/public -L$(INSTALL_DIR)/lib/private
+LINK_LIB = -ljson -lzcfg_msg -lzcfg_fe_rdm_access -lzcfg_fe_rdm_string -lzcfg_fe_rdm_struct -lzcfg_fe_schema -lzyutil -lzlog
+INC_PATH = -I$(TOOLCHAIN)/include -I$(COMMON_ZCFG_INCLUDE_DIR) -I.
+
+FE_PATH = ./
+NETWORK_BR_PATH = ./network/broadband
+NETWORK_DNS_PATH = ./network/dns
+NETWORK_NAT_PATH = ./network/nat
+NETWORK_ROUTING_PATH = ./network/routing
+NETWORK_HOME_PATH = ./network/homeNetworking
+NETWORK_INTF_GP_PATH = ./network/interfaceGrouping
+NETWORK_VLANGRP_PATH = ./network/vlanGroup
+NETWORK_IGMPMLD_PATH = ./network/igmp_mld
+NETWORK_WIRELESS_PATH = ./network/wireless
+NETWORK_QOS_PATH = ./network/qos
+NETWORK_USBSERVICE_PATH = ./network/usbService
+NETWORK_HOME_CONNECITIVY_PATH = ./network/homeConnectivity
+NETWORK_ETHCTL_PATH = ./network/ethctl
+NETWORK_TUNNELSETTING_PATH = ./network/tunnelSetting
+ifeq ($(CONFIG_BLUETOOTH_SUPPORT),y)
+NETWORK_BLUETOOTH_PATH = ./network/bluetooth
+endif
+MAINTENANCE_MGMT = ./maintenance/mgmt
+MAINTENANCE_DIAGNOSTIC_PATH = ./maintenance/diagnostic
+MAINTENANCE_EMAIL_PATH = ./maintenance/mail
+MAINTENANCE_LOG_PATH = ./maintenance/logsetting
+MAINTENANCE_USER_ACCOUNT_PATH = ./maintenance/useraccount
+MAINTENANCE_FIRMWARE_UPGRADE_PATH = ./maintenance/fwupgrade
+MAINTENANCE_BACKUP_RESTORE_PATH = ./maintenance/backupRestore
+MAINTENANCE = ./maintenance
+SECURITY_PPTP_PATH = ./security/pptp
+VOIP_PATH = ./voip
+VOIP_SIP_PATH = ./voip/sip
+VOIP_PHONE_PATH = ./voip/phone
+VOIP_CALLRULE_PATH = ./voip/callRule
+VOIP_CALLHISTORY_PATH = ./voip/callHistory
+SECURITY_FIREWALL_PATH = ./security/firewall
+SECURITY_MACFILTER_PATH = ./security/macFilter
+SECURITY_PARENTALCTL_PATH = ./security/parentalControl
+SECURITY_SCHEDULERRULE_PATH = ./security/schedulerRule
+SECURITY_CERTIFICATE_PATH = ./security/certificate
+MONITOR_PATH = ./monitor
+JS_PATH = ./js
+SOURCES += $(wildcard $(FE_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_BR_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_DNS_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_ROUTING_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_NAT_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_HOME_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_INTF_GP_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_VLANGRP_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_IGMPMLD_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_QOS_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_USBSERVICE_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_HOME_CONNECITIVY_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_ETHCTL_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_TUNNELSETTING_PATH)/*.c)
+ifeq ($(CONFIG_BLUETOOTH_SUPPORT),y)
+SOURCES += $(wildcard $(NETWORK_BLUETOOTH_PATH)/*.c)
+endif
+SOURCES += $(wildcard $(MAINTENANCE_MGMT)/*.c)
+SOURCES += $(wildcard $(MAINTENANCE_DIAGNOSTIC_PATH)/*.c)
+SOURCES += $(wildcard $(MAINTENANCE_USER_ACCOUNT_PATH)/*.c)
+
+SOURCES += $(wildcard $(MAINTENANCE_FIRMWARE_UPGRADE_PATH)/*.c)
+#Support Online Firmware Upgrade for MTKSOC
+ifneq ($(CONFIG_ZyXEL_Online_Firmware_Upgrade),y)
+SOURCES := $(filter-out $(MAINTENANCE_FIRMWARE_UPGRADE_PATH)/zcfg_fe_dal_online_fw_info.c, $(SOURCES))
+endif
+ifeq ($(CONFIG_ZYXEL_PARTIAL_RESET),y)
+SOURCES += $(wildcard $(MAINTENANCE_BACKUP_RESTORE_PATH)/*.c)
+endif
+#Support Online Module Upgrade for MTKSOC
+ifneq ($(CONFIG_ZyXEL_Online_Module_Upgrade),y)
+SOURCES := $(filter-out $(MAINTENANCE_FIRMWARE_UPGRADE_PATH)/zcfg_fe_dal_online_module_info.c, $(SOURCES))
+endif
+SOURCES += $(wildcard $(MAINTENANCE)/*.c)
+
+ifeq ($(CONFIG_KERNEL_ZYXEL_PPTP_SUPPORT),y)
+SOURCES += $(wildcard $(SECURITY_PPTP_PATH)/*.c)
+endif
+ifeq ($(CONFIG_PACKAGE_ZyIMS),y)
+SOURCES += $(wildcard $(VOIP_SIP_PATH)/*.c)
+SOURCES += $(wildcard $(VOIP_PHONE_PATH)/*.c)
+SOURCES += $(wildcard $(VOIP_CALLRULE_PATH)/*.c)
+SOURCES += $(wildcard $(VOIP_CALLHISTORY_PATH)/*.c)
+endif
+SOURCES += $(wildcard $(MAINTENANCE_EMAIL_PATH)/*.c)
+SOURCES += $(wildcard $(MAINTENANCE_LOG_PATH)/*.c)
+SOURCES += $(wildcard $(SECURITY_FIREWALL_PATH)/*.c)
+SOURCES += $(wildcard $(NETWORK_WIRELESS_PATH)/*.c)
+SOURCES += $(wildcard $(SECURITY_MACFILTER_PATH)/*.c)
+ifeq ($(CONFIG_CBT_CUSTOMIZATION),y)
+SOURCES += $(wildcard $(SECURITY_PARENTALCTL_PATH)/zcfg_fe_dal_parentalControl_cbt.c)
+else
+SOURCES += $(wildcard $(SECURITY_PARENTALCTL_PATH)/zcfg_fe_dal_parentalControl.c)
+endif
+SOURCES += $(wildcard $(SECURITY_SCHEDULERRULE_PATH)/*.c)
+SOURCES += $(wildcard $(SECURITY_CERTIFICATE_PATH)/*.c)
+SOURCES += $(wildcard $(MONITOR_PATH)/*.c)
+SOURCES += $(wildcard $(JS_PATH)/*.c)
+
+ifneq ($(CONFIG_MTKSOC_SCHEDULE_REBOOT_SUPPORT), y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_sch_reboot.c, $(SOURCES))
+endif
+
+ifneq ($(CONFIG_ZYXEL_FQ_CODEL), y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_sch_fqcodel.c, $(SOURCES))
+endif
+
+ifneq ($(CONFIG_ZYXEL_CELLWAN_WITH_LTE_MODULE_TEMPERATURE), y)
+SOURCES := $(filter-out $(NETWORK_BR_PATH)/zcfg_fe_dal_module_temperature.c, $(SOURCES))
+endif
+
+# DHCPv6 Relay support
+ifneq ($(CONFIG_PACKAGE_wide-dhcpv6-relay),y)
+SOURCES := $(filter-out $(NETWORK_HOME_PATH)/zcfg_fe_dal_dhcpv6relay.c, $(SOURCES))
+else
+CFLAGS += -DDHCPV6_RELAY_SUPPORT
+endif
+
+# DHCPv6 Server IAPD support
+ifeq ($(CONFIG_MTKSOC_DHCP6S_IAPD_SUPPORT),y)
+CFLAGS += -DMTKSOC_DHCP6S_IAPD_SUPPORT
+endif
+
+# Enable the VLAN/Interface Group with CELLWAN type
+ifeq ($(CONFIG_ZYXEL_CELLWAN_WITH_VLAN_INTF_GROUP),y)
+CFLAGS += -DZYXEL_CELLWAN_WITH_VLAN_INTF_GROUP
+endif
+
+OBJS = $(patsubst %.c, %.o, $(SOURCES))
+
+#OBJ_FILES = zcfg_fe_dal.o zcfg_fe_dal_broadband.o zcfg_fe_dal_mgmt.o
+
+ifeq ($(strip $(CONFIG_ZYXEL_USA_PRODUCT)),y)
+CFLAGS += -DZYXEL_USA_PRODUCT
+endif
+
+ifeq ($(strip $(SUPPORT_DSL_BONDING)),y)
+CFLAGS += -DSUPPORT_DSL_BONDING
+endif
+
+ifeq ($(CONFIG_BLUETOOTH_SUPPORT),y)
+CFLAGS += -DBLUETOOTH_SUPPORT
+endif
+
+ifeq ($(CONFIG_ZYXEL_WAN_MAC),y)
+CFLAGS += -DZYXEL_WAN_MAC
+endif
+
+ifeq ($(CONFIG_ZyXEL_WEB_GUI_SINGLE_IGMP_MLD),y)
+CFLAGS += -DZyXEL_WEB_GUI_SINGLE_IGMP_MLD
+endif
+
+ifeq ($(CONFIG_ZYXEL_VDSL_Support_30A),y)
+CFLAGS += -DZYXEL_VDSL_Support_30A
+endif
+ifeq ($(CONFIG_ZYXEL_VDSL_Support_35B),y)
+CFLAGS += -DZYXEL_VDSL_Support_35B
+endif
+ifeq ($(CONFIG_CBT_CUSTOMIZATION),y)
+CFLAGS += -DCBT_CUSTOMIZATION
+endif
+ifeq ($(CONFIG_CODETEL_CUSTOMIZATION),y)
+CFLAGS += -DCODETEL_CUSTOMIZATION
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_WIRELESS_NEW_VERSION_ONE),y)
+CFLAGS += -DZYXEL_WEB_WIRELESS_NEW_VERSION_ONE
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_NETWORK_MAP_NEW_STYLE),y)
+CFLAGS += -DZYXEL_WEB_NETWORK_MAP_NEW_STYLE
+endif
+ifeq ($(CONFIG_INTERNET_LED_DEPEND_ON_DEFAULT_GW),y)
+CFLAGS += -DINTERNET_LED_DEPEND_ON_DEFAULT_GW
+endif
+ifeq ($(CONFIG_ZyXEL_WEB_GUI_SHOW_PON),y)
+CFLAGS += -DZYXEL_ZyXEL_WEB_GUI_SHOW_PON
+endif
+
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_SHOW_CELLWAN),y)
+CFLAGS += -DZYXEL_WEB_GUI_SHOW_CELLWAN
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_MULTI_APN),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_MULTI_APN
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_SMS),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_SMS
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK_NR),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_PCI_LOCK_NR
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_QSCAN),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_QSCAN
+endif
+ifeq ($(CONFIG_ZYXEL_CELLWAN_WITH_LTE_MODULE_TEMPERATURE),y)
+CFLAGS += -DZYXEL_CELLWAN_WITH_LTE_MODULE_TEMPERATURE
+endif
+CFLAGS +=-DZYXEL_PCI_LOCK_NUM=$(CONFIG_BUILD_ZYXEL_PCI_LOCK_NUM)
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NR_NSA),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_NR_NSA
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_NBR_CELLS),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_NBR_CELLS
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_GNSS_LOCATION),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_GNSS_LOCATION
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_SERVICE_DOMAIN),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_SERVICE_DOMAIN
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_CELLWAN_SUPPORT_ESIM),y)
+CFLAGS += -DZYXEL_WEB_GUI_CELLWAN_SUPPORT_ESIM
+endif
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_ECONET_QoS_STYLE),y)
+CFLAGS += -DZYXEL_WEB_GUI_ECONET_QoS_STYLE
+endif
+
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_SHOW_QOS_CLS_TARGET_INTF),y)
+CFLAGS += -DZYXEL_WEB_GUI_SHOW_QOS_CLS_TARGET_INTF
+endif
+
+ifeq ($(CONFIG_ABOG_CUSTOMIZATION),y)
+CFLAGS += -DABOG_CUSTOMIZATION
+endif
+
+ifeq ($(CONFIG_PACKAGE_webgui_vue),y)
+CFLAGS += -DPACKAGE_WEB_GUI_VUE
+endif
+
+ifeq ($(CONFIG_ZYXEL_TR69_SUPPLEMENTAL_ACS),y)
+CFLAGS += -DZYXEL_TR69_SUPPLEMENTAL_ACS
+endif
+
+#XMPP
+ifeq ($(CONFIG_ZYXEL_TR69_XMPP_CONNECTION_REQUEST),y)
+CFLAGS += -DZYXEL_TR69_XMPP_CONNECTION_REQUEST
+endif
+
+#ZYXEL_REMOTE_ACCESS_PRIVILEGE
+ifeq ($(CONFIG_ZYXEL_REMOTE_ACCESS_PRIVILEGE),y)
+CFLAGS += -DZYXEL_REMOTE_ACCESS_PRIVILEGE
+endif
+
+#WLAN_SCHEDULER_AUTO_SWITCH_RADIO_ON
+ifeq ($(CONFIG_ZYXEL_WLAN_SCHEDULER_AUTO_SWITCH_RADIO_ON),y)
+CFLAGS += -DZYXEL_WLAN_SCHEDULER_AUTO_SWITCH_RADIO_ON
+endif
+
+#iskon
+ifeq ($(CONFIG_ISKON_CUSTOMIZATION),y)
+CFLAGS += -DISKON_CUSTOMIZATION
+endif
+
+ifeq ($(CONFIG_ZYXEL_AP_STEERING),y)
+CFLAGS += -DAPSTEERING
+endif
+
+#SONiQ Steering
+ifeq ($(CONFIG_ZYXEL_SONIQ),y)
+    CFLAGS += -DBUILD_SONIQ
+endif
+
+ifeq ($(CONFIG_ZYXEL_ONESSID),y)
+    CFLAGS += -DZYXEL_ONESSID
+endif
+
+#WIND_ITALY_CUSTOMIZATION
+ifeq ($(CONFIG_WIND_ITALY_CUSTOMIZATION),y)
+CFLAGS += -DWIND_ITALY_CUSTOMIZATION
+endif
+
+#WIND Italy VMG8825-B50B Customization
+ifeq ($(CONFIG_ZCFG_VMG8825_B50B_WIND),y)
+CFLAGS += -DZCFG_VMG8825_B50B_WIND
+endif
+
+#ONE SSID SECURITY SYNC
+ifeq ($(CONFIG_ZY_WIFI_ONESSID_SECURITY_SYNC),y)
+CFLAGS += -DWIFI_ONESSID_SECURITY_SYNC
+endif
+
+#ZYXEL_GUIVUE_USB_INFO_SHOW_SYSINFO
+ifeq ($(CONFIG_ZYXEL_GUIVUE_USB_INFO_SHOW_SYSINFO),y)
+CFLAGS += -DZYXEL_GUIVUE_USB_INFO_SHOW_SYSINFO
+endif
+
+ifeq ($(CONFIG_PACKAGE_ZyIMS),y)
+CFLAGS += -DBUILD_PACKAGE_ZyIMS=1
+INC_PATH += -I$(VOIP_PATH)
+endif
+
+#Elisa
+ifeq ($(CONFIG_ELISA_NAT_PORTFORWARD_CUSTOMIZATION),y)
+CFLAGS += -DELISA_NAT_PORTFORWARD_CUSTOMIZATIONN
+endif
+
+ifeq ($(CONFIG_ELISA_NETWORKMAP_CUSTOMIZATION),y)
+CFLAGS += -DELISA_NETWORKMAP_CUSTOMIZATION
+endif
+
+ifeq ($(CONFIG_ZYXEL_SYNC_CCWAN_TO_ALL_DEFGW),y)
+CFLAGS += -DZYXEL_SYNC_CCWAN_TO_ALL_DEFGW
+endif
+
+#HAWAII TELECOM
+ifeq ($(HAWAIIAN_TELCOM),y)
+CFLAGS += -DHAWAIIAN_TELCOM
+endif
+
+#Telia Estonia
+ifeq ($(TELIA_CUSTOMIZATION),y)
+CFLAGS += -DTELIA_CUSTOMIZATION
+endif
+
+#DNA
+ifeq ($(CONFIG_DNA_CUSTOMIZATION),y)
+CFLAGS += -DDNA_CUSTOMIZATION
+endif
+
+ifeq ($(CONFIG_MTKSOC_SCHEDULE_REBOOT_SUPPORT), y)
+CFLAGS += -DCONFIG_MTKSOC_SCHEDULE_REBOOT_SUPPORT
+endif
+
+ifeq ($(SHA512_PASSWD),y)
+CFLAGS += -DSHA512_PASSWD
+endif
+
+ifeq ($(CONFIG_TARGET_en75xx),y)
+CFLAGS += -DCONFIG_TARGET_en75xx
+endif
+
+ifeq ($(CONFIG_ZYXEL_NAT_LOG),y)
+CFLAGS += -DZYXEL_NAT_LOG
+endif
+
+#DMZ Management
+ifeq ($(CONFIG_ZYXEL_SUPPORT_DMZ_MANAGEMENT),y)
+CFLAGS += -DZYXEL_SUPPORT_DMZ_MANAGEMENT
+endif
+
+ifeq ($(CONFIG_ZYXEL_PPP_AUTH_MENU_CHAP_PAP_CTL),y)
+CFLAGS += -DCONFIG_ZYXEL_PPP_AUTH_MENU_CHAP_PAP_CTL
+endif
+
+ifeq ("$(strip ${ZCFG_PLATFORM})","ECONET")
+CFLAGS += -DECONET_PLATFORM
+endif
+
+##Co-FW
+ifeq ($(CONFIG_SAME_FW_FOR_TWO_BOARD),y)
+CFLAGS += -DSAME_FW_FOR_TWO_BOARD
+endif
+
+#Support PPTP VPN
+ifeq ($(CONFIG_KERNEL_ZYXEL_PPTP_SUPPORT),y)
+CFLAGS += -DCONFIG_PPTP_SUPPORT
+endif
+
+#Support WiFi Security Mode WPA/WPA2-PSK
+ifeq ($(CONFIG_ZYXEL_WIFI_SUPPORT_WPA_MIX_MODE),y)
+CFLAGS += -DZYXEL_WIFI_SUPPORT_WPA_MIX_MODE
+endif
+
+#retype login password before apply change
+ifneq ($(CONFIG_ZYXEL_RETYPE_LOGIN_PASSWORD_BEFORE_APPLY),y)
+SOURCES := $(filter-out $(NETWORK_HOME_PATH)/zcfg_fe_dal_password_check.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_RETYPE_LOGIN_PASSWORD_BEFORE_APPLY
+endif
+
+#MQTT publisher
+ifneq ($(CONFIG_ZYXEL_MQTT_PUBLISHER),y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_mqtt.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_mqtt_client_publish.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_MQTT_PUBLISHER
+endif
+
+#TR471
+ifneq ($(CONFIG_ZYXEL_TR471_UDP_SPEED_TEST),y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr471_obudpst.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_TR471_UDP_SPEED_TEST
+endif
+
+# TR369 usp local agent
+ifneq ($(CONFIG_ZYXEL_Support_TR369),y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369_agent_mtp.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369_agent_mtp_mqtt.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369_agent_controller.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369_agent_controller_mtp.c, $(SOURCES))
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_tr369_agent_controller_mtp_mqtt.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_Support_TR369
+endif
+
+ifneq ($(CONFIG_ZYXEL_L2TPV3),y)
+SOURCES := $(filter-out $(NETWORK_BR_PATH)/zcfg_fe_dal_L2TPv3.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_L2TPV3
+endif
+ifeq ($(CONFIG_ZYXEL_NUTTCP),y)
+CFLAGS += -DZYXEL_NUTTCP
+endif
+ifeq ($(CONFIG_ZYXEL_FEATURE_BITS),y)
+CFLAGS += -DZYXEL_FEATURE_BITS
+endif
+
+ifeq ($(CONFIG_ZYXEL_IMPROVE_SYSTEM_LOGS),y)
+CFLAGS += -DZYXEL_IMPROVE_SYSTEM_LOGS
+endif
+
+#Support Online Firmware Upgrade for MTKSOC
+ifeq ($(CONFIG_ZyXEL_Online_Firmware_Upgrade),y)
+CFLAGS += -DZyXEL_Online_Firmware_Upgrade
+endif
+
+#Support Online Module Upgrade for MTKSOC
+ifeq ($(CONFIG_ZyXEL_Online_Module_Upgrade),y)
+CFLAGS += -DZyXEL_Online_Module_Upgrade
+endif
+
+#Support partial reset
+ifeq ($(CONFIG_ZYXEL_PARTIAL_RESET),y)
+CFLAGS += -DZYXEL_PARTIAL_RESET
+endif
+
+ifeq ($(HIDE_OTHER_ACCOUNT_INFO_FOR_INDIVIDUAL_USER_ACCOUNT),y)
+CFLAGS += -DHIDE_OTHER_ACCOUNT_INFO_FOR_INDIVIDUAL_USER_ACCOUNT
+endif
+
+ifeq ($(COULD_CHANGE_ITS_OWN_PASSWORD),y)
+CFLAGS += -DCOULD_CHANGE_ITS_OWN_PASSWORD
+endif
+
+ifeq ($(CONFIG_PACKAGE_lte_srv_diag),y)
+CFLAGS += -DPACKAGE_lte_srv_diag
+endif
+
+# LTE Outdoor CPE WIFI alwayws boot up and apply auto switch off timer
+ifeq ($(CONFIG_ZY_WIFI_LTE_WLAN_AUTO_SWITCH_OFF),y)
+CFLAGS += -DLTE_WLAN_AUTO_SWITCH_OFF
+endif
+
+#Support SpeedTest
+ifeq ($(CONFIG_PACKAGE_SpeedTest),y)
+CFLAGS += -DPACKAGE_SpeedTest
+endif
+
+#FQ_CODEL
+ifeq ($(CONFIG_ZYXEL_FQ_CODEL), y)
+CFLAGS += -DZYXEL_FQ_CODEL
+endif
+
+#Support card page always show untag vlan as default
+ifeq ($(CONFIG_ZYXEL_CHECK_UNTAG),y)
+CFLAGS += -DZYXEL_CHECK_UNTAG
+endif
+#Support card page to enable / disable DHCP Server
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_ENABLE_DHCP_SRV),y)
+CFLAGS += -DZYXEL_WEB_GUI_ENABLE_DHCP_SRV
+endif
+#Support ZYXEL CLI command to change teliaroot password
+ifeq ($(CONFIG_ZYXEL_TELIA_FINLAND_TELIAROOT_PASSWORD),y)
+CFLAGS += -DZYXEL_TELIA_FINLAND_TELIAROOT_PASSWORD
+endif
+
+# Show Bluetooth
+ifeq ($(CONFIG_ZYXEL_WEB_GUI_SHOW_BLUETOOTH),y)
+CFLAGS += -DZYXEL_WEB_GUI_SHOW_BLUETOOTH
+endif
+
+#Lwm2m client
+ifneq ($(CONFIG_ZYXEL_LWM2M_CLIENT),y)
+SOURCES := $(filter-out $(MAINTENANCE_MGMT)/zcfg_fe_dal_mgmt_lwm2m.c, $(SOURCES))
+else
+CFLAGS += -DZYXEL_LWM2M_CLIENT
+endif
+
+# Show  DHCPv4 Server Custom_DHCP_Option
+ifeq ($(CONFIG_ZYXEL_DHCPV4_SERVER_CUSTOM_DHCP_OPT),y)
+CFLAGS += -DZYXEL_DHCPV4_SERVER_CUSTOM_DHCP_OPT
+endif
+
+# support proxy arp
+ifeq ($(CONFIG_ZYXEL_PROXY_ARP),y)
+CFLAGS += -DZYXEL_PROXY_ARP
+endif
+
+# DAL API authorization by page privilege of account group
+ifeq ($(CONFIG_ZYXEL_DAL_AUTHORIZATION_BY_ACCOUNT_GROUP_PAGE_PRIVILEGE),y)
+CFLAGS += -DZYXEL_DAL_AUTHORIZATION_BY_ACCOUNT_GROUP_PAGE_PRIVILEGE
+endif
+
+# Support Apclient
+ifeq ($(CONFIG_SUPPORT_APCLIENT),y)
+CFLAGS += -DSUPPORT_APCLIENT
+endif
+
+ifeq ($(CONFIG_ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER),y)
+CFLAGS += -DZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
+endif
+
+ifeq ($(CONFIG_ZYXEL_SUPPORT_HOST_MAC_ADDRESS_OUI),y)
+CFLAGS += -DZYXEL_SUPPORT_HOST_MAC_ADDRESS_OUI
+endif
+
+# Support Dual SIM
+ifeq ($(CONFIG_RILCMD_SUPPORT_DUAL_SIM),y)
+CFLAGS += -DRILCMD_SUPPORT_DUAL_SIM
+endif
+
+ifeq ($(CONFIG_RILCMD_SUPPORT_DUAL_SIM_WITH_DIFFERENT_SETTINGS), y)
+CFLAGS += -DRILCMD_SUPPORT_DUAL_SIM_WITH_DIFFERENT_SETTINGS
+endif
+
+LDFLAGS += $(LIB_PATH) $(LINK_LIB)
+CFLAGS += $(INC_PATH) -std=gnu99
+
+
+.PHONY : libzcfg_fe_dal
+
+all: clean libzcfg_fe_dal
+
+.c.o:
+	$(CC) $(CFLAGS) -Wall -fPIC -c $< -o $@
+
+libzcfg_fe_dal : $(OBJS)
+	$(CC) $(LDFLAGS) -shared -o libzcfg_fe_dal.so $(OBJS)
+
+install:
+	install -m 755 libzcfg_fe_dal.so $(INSTALL_DIR)/lib/public
+	install -m 666 zcfg_fe_dal.h $(COMMON_ZCFG_INCLUDE_DIR)
+
+clean:
+	rm -rf *.o
+	rm -rf *.so
+	rm -rf $(COMMON_ZCFG_INCLUDE_DIR)/zcfg_fe_dal.h
+
+
+

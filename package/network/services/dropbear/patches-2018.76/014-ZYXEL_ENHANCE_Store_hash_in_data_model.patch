@@ -1,0 +1,29 @@
+diff -urN dropbear.orig/Makefile.in dropbear/Makefile
+--- dropbear.orig/Makefile.in	2022-07-14 18:06:10.623830000 +0800
++++ dropbear/Makefile.in	2022-07-14 18:06:43.139830000 +0800
+@@ -118,6 +118,10 @@
+ 	CFLAGS += -DTELIA_CUSTOMIZATION
+ endif
+ 
++ifeq ($(CONFIG_ZYXEL_HASH_ACCOUNT_PASSWORD_BY_SHA512),y)
++	CFLAGS += -DSHA512_PASSWD
++endif
++
+ # these are exported so that libtomcrypt's makefile will use them
+ export CC
+ export CFLAGS
+diff -urN dropbear.orig/svr-authpasswd.c dropbear/svr-authpasswd.c
+--- dropbear.orig//svr-authpasswd.c	2022-07-14 18:06:19.495830000 +0800
++++ dropbear/svr-authpasswd.c	2022-07-14 18:07:16.115830000 +0800
+@@ -224,7 +224,11 @@
+ 	if (constant_time_strcmp(testcrypt, passwdcrypt) == 0) {
+ #else
+ 
++#ifndef SHA512_PASSWD
+ 	authResult = zyUtilAuthUserAccount(username, password);
++#else
++	authResult = zyUtilAuthUserAccount(username, password, NULL);
++#endif
+ 	if ((authResult == 1 && strcmp(testcrypt, passwdcrypt) == 0) || authResult == 0) {
+ #endif
+ //SHA512_PASSWD

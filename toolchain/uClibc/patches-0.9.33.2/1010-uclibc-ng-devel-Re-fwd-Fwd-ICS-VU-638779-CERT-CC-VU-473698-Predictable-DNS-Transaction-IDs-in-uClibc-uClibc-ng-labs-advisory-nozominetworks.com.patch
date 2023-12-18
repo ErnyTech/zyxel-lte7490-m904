@@ -1,0 +1,61 @@
+diff -urN uClibc-0.9.33.2.orig/libc/inet/resolv.c uClibc-0.9.33.2/libc/inet/resolv.c
+--- uClibc-0.9.33.2.orig/libc/inet/resolv.c	2022-10-05 15:09:35.879172000 +0800
++++ uClibc-0.9.33.2/libc/inet/resolv.c	2022-10-05 15:13:50.614920214 +0800
+@@ -318,6 +318,7 @@
+ #include <sys/un.h>
+ #include <sys/stat.h>
+ #include <bits/uClibc_mutex.h>
++#include <fcntl.h>
+ #include "internal/parse_config.h"
+ 
+ /* poll() is not supported in kernel <= 2.0, therefore if __NR_poll is
+@@ -1213,6 +1214,20 @@
+ 	return i + RRFIXEDSZ + a->rdlength;
+ }
+ 
++
++uint16_t dnsrand_next(int urand_fd, int def_value) {
++	if (urand_fd == -1) return def_value;
++	uint16_t val;
++	if(read(urand_fd, &val, 2) != 2) return def_value;
++	return val;
++}
++
++int dnsrand_setup(int *urand_fd, int def_value) {
++	*urand_fd = open("/dev/urandom", O_RDONLY);
++	if (*urand_fd == -1) return def_value;
++	return dnsrand_next(*urand_fd, def_value);
++}
++
+ /* On entry:
+  *  a.buf(len) = auxiliary buffer for IP addresses after first one
+  *  a.add_count = how many additional addresses are there already
+@@ -1238,6 +1253,7 @@
+ 	/* Protected by __resolv_lock: */
+ 	static int last_ns_num = 0;
+ 	static uint16_t last_id = 1;
++	static int urand_fd = -1;
+ 
+ 	int i, j, fd, rc;
+ 	int packet_len;
+@@ -1306,7 +1322,7 @@
+ 		}
+ 		/* first time? pick starting server etc */
+ 		if (local_ns_num < 0) {
+-			local_id = last_id;
++			local_id = dnsrand_setup(&urand_fd, last_id);
+ /*TODO: implement /etc/resolv.conf's "options rotate"
+  (a.k.a. RES_ROTATE bit in _res.options)
+ 			local_ns_num = 0;
+@@ -1317,8 +1333,10 @@
+ 		retries_left--;
+ 		if (local_ns_num >= __nameservers)
+ 			local_ns_num = 0;
+-		local_id++;
++		local_id = dnsrand_next(urand_fd, local_id++);
+ 		local_id &= 0xffff;
++		close(urand_fd);
++		DPRINTF("uClibc:DBUG:local_id:0x%hx\n", local_id);
+ 		/* write new values back while still under lock */
+ 		last_id = local_id;
+ 		last_ns_num = local_ns_num;

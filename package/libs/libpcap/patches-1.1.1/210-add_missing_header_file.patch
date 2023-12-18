@@ -1,0 +1,14 @@
+Index: libpcap-1.1.1/pcap-linux.c
+===================================================================
+--- libpcap-1.1.1.orig/pcap-linux.c
++++ libpcap-1.1.1/pcap-linux.c
+@@ -137,6 +137,9 @@ static const char rcsid[] _U_ =
+ #include <net/if_arp.h>
+ #include <poll.h>
+ #include <dirent.h>
++#ifdef TARGET_quectel
++#include <linux/sockios.h>
++#endif
+ 
+ /*
+  * Got Wireless Extensions?

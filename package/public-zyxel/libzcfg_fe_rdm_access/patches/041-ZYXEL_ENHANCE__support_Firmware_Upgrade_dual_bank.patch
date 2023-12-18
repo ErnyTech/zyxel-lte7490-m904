@@ -1,0 +1,35 @@
+diff -urN libzcfg_fe_rdm_access-1.0.orig/zcfg_fe_rdm_access.c libzcfg_fe_rdm_access-1.0/zcfg_fe_rdm_access.c
+--- libzcfg_fe_rdm_access-1.0.orig/zcfg_fe_rdm_access.c	2022-04-13 19:35:04.734939000 +0800
++++ libzcfg_fe_rdm_access-1.0/zcfg_fe_rdm_access.c	2022-04-13 20:38:24.342939000 +0800
+@@ -430,6 +430,10 @@
+ 		case REQUEST_FIRMWARE_UPGRADE:
+ 		case REQUEST_FIRMWARE_UPGRADE_CHK:
+ 		case REQUEST_FIRMWARE_WRITE_ONLY:
++		case REQUEST_FIRMWARE_UPGRADE_FIRST_PARTITION_CHK:
++		case REQUEST_FIRMWARE_UPGRADE_SECOND_PARTITION_CHK:
++		case REQUEST_FIRMWARE_WRITE_ONLY_FIRST_PARTITION:
++		case REQUEST_FIRMWARE_WRITE_ONLY_SECOND_PARTITION:
+ 		case REQUEST_ROMD_UPGRADE:
+ 		case REQUEST_FIRMWARE_UPGRADE_FWUR:
+ 			if(payload == NULL || strlen(payload) == 0)
+@@ -668,4 +672,4 @@
+ 
+ 	return tr369_set_boot_info(info);
+ }
+-/*End of obuspa support*/
+\ No newline at end of file
++/*End of obuspa support*/
+diff -urN libzcfg_fe_rdm_access-1.0.orig/zcfg_fe_rdm_access.h libzcfg_fe_rdm_access-1.0/zcfg_fe_rdm_access.h
+--- libzcfg_fe_rdm_access-1.0.orig/zcfg_fe_rdm_access.h	2022-04-13 20:02:07.650939000 +0800
++++ libzcfg_fe_rdm_access-1.0/zcfg_fe_rdm_access.h	2022-04-13 20:38:14.054939000 +0800
+@@ -18,6 +18,10 @@
+ #define zcfgFeFwUpgrade(payload)        zcfgFeReqSend(REQUEST_FIRMWARE_UPGRADE, payload)
+ #define zcfgFeFwUpgradeForFWUR(payload)        zcfgFeReqSend(REQUEST_FIRMWARE_UPGRADE_FWUR, payload)
+ #define zcfgFeFwUpgradeWrite(payload)   zcfgFeReqSend(REQUEST_FIRMWARE_WRITE_ONLY, payload)
++#define zcfgFeFwUpgradeWriteFirstPart(payload)    zcfgFeReqSend(REQUEST_FIRMWARE_WRITE_ONLY_FIRST_PARTITION, payload)
++#define zcfgFeFwUpgradeWriteSecondPart(payload)   zcfgFeReqSend(REQUEST_FIRMWARE_WRITE_ONLY_SECOND_PARTITION, payload)
++#define zcfgFeFwUpgradeFirstPart(payload)        zcfgFeReqSend(REQUEST_FIRMWARE_UPGRADE_FIRST_PARTITION_CHK, payload)
++#define zcfgFeFwUpgradeSecondPart(payload)       zcfgFeReqSend(REQUEST_FIRMWARE_UPGRADE_SECOND_PARTITION_CHK, payload)
+ #define zcfgFeFwUpgradeCheck(payload)	zcfgFeReqSend(REQUEST_FIRMWARE_UPGRADE_CHK, payload)
+ #define zcfgFeRestoreDefault(payload)   zcfgFeReqSend(REQUEST_RESTORE_DEFAULT, payload)
+ #define zcfgFeRestoreDeCheck(payload)   zcfgFeReqSend(REQUEST_RESTORE_DEFAULT_CHK, payload)

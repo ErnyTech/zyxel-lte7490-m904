@@ -1,0 +1,58 @@
+--- zebra-0.93a-org/zebra/if_proc.c	2020-03-26 11:34:02.502902467 +0800
++++ zebra-0.93a/zebra/if_proc.c	2020-03-26 11:42:21.734912125 +0800
+@@ -161,7 +161,7 @@
+       ifp = if_get_by_name (name);
+       ifstat_dev_fields (version, stat, ifp);
+     }
+-
++  fclose (fp);
+   return 0;
+ }
+ 
+@@ -195,6 +195,7 @@
+       ifp = if_get_by_name (name);
+       if_add_update (ifp);
+     }
++  fclose (fp);
+   return 0;
+ }
+ 
+@@ -241,6 +242,7 @@
+ 
+       connected_add_ipv6 (ifp, &p.prefix, p.prefixlen, NULL);
+     }
++  fclose (fp);
+   return 0;
+ }
+ #endif /* HAVE_IPV6 && HAVE_PROC_NET_IF_INET6 */
+--- zebra-0.93a-org/zebra/ipforward_proc.c	2020-03-26 11:34:02.514902468 +0800
++++ zebra-0.93a/zebra/ipforward_proc.c	2020-03-26 11:38:06.762907193 +0800
+@@ -54,7 +54,7 @@
+      2 => ip forwarding off. */
+   pnt = fgets (buf, 6, fp);
+   sscanf (buf, "Ip: %d", &ipforwarding);
+-
++  fclose (fp);
+   if (ipforwarding == 1)
+     return 1;
+ 
+--- zebra-0.93a-org/zebra/rtread_proc.c	2020-03-26 11:34:02.506902468 +0800
++++ zebra-0.93a/zebra/rtread_proc.c	2020-03-26 11:44:05.982914142 +0800
+@@ -95,7 +95,7 @@
+ 
+       rib_add_ipv4 (ZEBRA_ROUTE_KERNEL, zebra_flags, &p, &gateway, 0, 0, 0, 0);
+     }
+-
++  fclose (fp);
+   return 0;
+ }
+ 
+@@ -154,7 +154,7 @@
+ 
+       rib_add_ipv6 (ZEBRA_ROUTE_KERNEL, zebra_flags, &p, &gateway, 0, 0);
+     }
+-
++  fclose (fp);
+   return 0;
+ }
+ #endif /* HAVE_IPV6 */

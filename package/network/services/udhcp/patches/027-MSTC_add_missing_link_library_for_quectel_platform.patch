@@ -1,0 +1,16 @@
+Index: udhcp-0.9.8/Makefile
+===================================================================
+--- udhcp-0.9.8.orig/Makefile
++++ udhcp-0.9.8/Makefile
+@@ -28,7 +28,11 @@ VER := 0.9.8
+ 
+ #INC_PATH = -I$(USERSPACE_ZCFG_INCLUDE)
+ 
++ifeq ($(CONFIG_TARGET_quectel),y)
++LINK_LIBS = -ljson -lzcfg_msg -lzcmd_tool -lzcfg_fe_rdm_access -lzcfg_fe_rdm_struct -lzlog -lzos
++else
+ LINK_LIBS = -ljson -lzcfg_msg -lzcmd_tool -lzcfg_fe_rdm_access -lzcfg_fe_rdm_struct 
++endif
+ 
+ OBJS_SHARED = options.o socket.o packet.o pidfile.o
+ DHCPD_OBJS = dhcpd.o arpping.o files.o leases.o serverpacket.o

@@ -1,0 +1,36 @@
+Index: dnsmasq-2.78/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2021-03-10 11:53:31.591041000 +0800
++++ dnsmasq-2.78/src/dnsmasq.h	2021-03-10 11:56:31.235041000 +0800
+@@ -462,6 +462,7 @@
+ #define F_NO_RR     (1u<<25)
+ #define F_IPSET     (1u<<26)
+ #define F_NOEXTRA   (1u<<27)
++#define F_SERVFAIL  (1u<<28)
+ 
+ /* Values of uid in crecs with F_CONFIG bit set. */
+ #define SRC_INTERFACE 0
+Index: dnsmasq-2.78/src/rfc1035.c
+===================================================================
+--- dnsmasq-2.78.orig/src/rfc1035.c	2021-03-10 11:53:31.591041000 +0800
++++ dnsmasq-2.78/src/rfc1035.c	2021-03-10 11:58:35.787041000 +0800
+@@ -807,6 +807,8 @@
+     SET_RCODE(header, NOERROR); /* empty domain */
+   else if (flags == F_NXDOMAIN)
+     SET_RCODE(header, NXDOMAIN);
++  else if (flags == F_SERVFAIL)
++    SET_RCODE(header, SERVFAIL);
+   else if (flags == F_IPV4) {   /* we know the address */
+     SET_RCODE(header, NOERROR);
+     header->ancount = htons(1);
+@@ -1147,6 +1149,10 @@
+       ntohs(header->qdcount) == 0 || OPCODE(header) != QUERY)
+     return 0;
+ 
++  /* always servfail queries with RD unset, to avoid cache snooping. */
++  if (!(header->hb3 & HB3_RD))
++    return setup_reply(header, qlen, NULL, F_SERVFAIL, 0);
++
+   /* Don't return AD set if checking disabled. */
+   if (header->hb4 & HB4_CD)
+     sec_data = 0;

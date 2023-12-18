@@ -1,0 +1,236 @@
+diff -uar dnsmasq-2.78.orig/src/dhcp.c dnsmasq-2.78/src/dhcp.c
+--- dnsmasq-2.78.orig/src/dhcp.c	2021-01-07 15:45:49.538258236 +0800
++++ dnsmasq-2.78/src/dhcp.c	2021-01-07 15:53:19.383606386 +0800
+@@ -699,6 +699,12 @@
+   int i, pass;
+   unsigned int j;
+ 
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++  int fd = -1;
++  struct ifreq ifr;
++  char *iface = LAN_INTERFACE;
++#endif
++
+   /* hash hwaddr: use the SDBM hashing algorithm.  Seems to give good
+      dispersal even with similarly-valued "strings". */
+   for (j = 0, i = 0; i < hw_len; i++)
+@@ -729,6 +735,31 @@
+         /* iterate until we find a free address. */
+         addr = start;
+ 
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++	 struct dhcp_lease *leaseIPPass = lease_find_by_addr(addr);
++	 if (leaseIPPass != NULL) {
++		 //If receiving different MACs in DISCOVER request for same IP
++		 //Check if this IP is used now.
++		 if (strcmp(leaseIPPass->hwaddr, hwaddr) != 0) {
++			 if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) != -1) {
++				 ifr.ifr_addr.sa_family = AF_INET;
++				 strncpy(ifr.ifr_name , iface , IFNAMSIZ-1);
++				 if (ioctl(fd, SIOCGIFHWADDR, &ifr) != -1) {
++					 if (arpping(addr.s_addr, (unsigned char *)ifr.ifr_hwaddr.sa_data, LAN_INTERFACE) == 0) {
++						 //This IP is used, do nothing.
++					 }
++					 else {
++						 //No reply from this IP, release it from lease structure.
++						 lease_prune(leaseIPPass, now);
++					 }
++				 }
++				 close(fd);
++				 fd = -1;
++			}
++		 }
++	  }
++#endif
++
+         do {
+           /* eliminate addresses in use by the server. */
+           for (d = context; d; d = d->current)
+@@ -1072,4 +1072,157 @@
+   return NULL;
+ }
+ 
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++//modified from busybox/arpping.c
++struct arpMsg {
++	/* Ethernet header */
++	uint8_t  h_dest[6];		/* 00 destination ether addr */
++	uint8_t  h_source[6];	/* 06 source ether addr */
++	uint16_t h_proto;	 	/* 0c packet type ID field */
++
++	/* ARP packet */
++	uint16_t htype;			/* 0e hardware type (must be ARPHRD_ETHER) */
++	uint16_t ptype;			/* 10 protocol type (must be ETH_P_IP) */
++	uint8_t  hlen;			/* 12 hardware address length (must be 6) */
++	uint8_t  plen;			/* 13 protocol address length (must be 4) */
++	uint16_t operation;		/* 14 ARP opcode */
++	uint8_t  sHaddr[6];		/* 16 sender's hardware address */
++	uint8_t  sInaddr[4];	/* 1c sender's IP address */
++	uint8_t  tHaddr[6];		/* 20 target's hardware address */
++	uint8_t  tInaddr[4];	/* 26 target's IP address */
++	uint8_t  pad[18];		/* 2a pad for min. ethernet payload (60 bytes) */
++};
++
++enum {
++	ARP_MSG_SIZE = 0x2a
++};
++
++unsigned long long monotonic_ms(void)
++{
++	struct timeval tv;
++	gettimeofday(&tv, NULL);
++	return tv.tv_sec * 1000ULL + tv.tv_usec / 1000;
++}
++
++char* safe_strncpy(char *dst, const char *src, size_t size)
++{
++	if (!size) return dst;
++	dst[--size] = '\0';
++	return strncpy(dst, src, size);
++}
++
++ssize_t safe_read(int fd, void *buf, size_t count)
++{
++	ssize_t n;
++
++	do {
++		n = read(fd, buf, count);
++	} while (n < 0 && errno == EINTR);
++
++	return n;
++}
++
++int safe_poll(struct pollfd *ufds, nfds_t nfds, int timeout)
++{
++	while (1) {
++		int n = poll(ufds, nfds, timeout);
++		if (n >= 0)
++			return n;
++		/* Make sure we inch towards completion */
++		if (timeout > 0)
++			timeout--;
++		/* E.g. strace causes poll to return this */
++		if (errno == EINTR)
++			continue;
++		/* Kernel is very low on memory. Retry. */
++		/* I doubt many callers would handle this correctly! */
++		if (errno == ENOMEM)
++			continue;
++		printf("%s(): Fail in poll().\n", __func__);
++		return n;
++	}
++}
++
++//return 0 if get reply from target_ip, return -1 if no reply from target_ip
++int arpping(uint32_t target_ip, uint8_t *sender_mac, const char *interface)
++{
++	int timeout_ms;
++	struct pollfd pfd[1];
++#define s (pfd[0].fd)
++	int rv = 1;			 /* "no reply received" yet */
++	struct sockaddr addr;   /* for interface name */
++	struct arpMsg arp;
++	int const_int_1 = 1;
++
++	s = socket(PF_PACKET, SOCK_PACKET, htons(ETH_P_ARP));
++	if (s == -1) {
++		printf("%s(): Fail to open socket.\n", __func__);
++		return -1;
++	}
++
++	//set it to broadcast
++	if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &const_int_1, sizeof(const_int_1)) == -1) {
++		printf("%s(): Fail to socket to broadcast.\n", __func__);
++		goto ret;
++	}
++
++	/* send arp request */
++	memset(&arp, 0, sizeof(arp));
++	memset(arp.h_dest, 0xff, 6);			/* MAC DA */
++	memcpy(arp.h_source, sender_mac, 6);	/* MAC SA */
++	arp.h_proto = htons(ETH_P_ARP);			/* protocol type (Ethernet) */
++	arp.htype = htons(ARPHRD_ETHER);		/* hardware type */
++	arp.ptype = htons(ETH_P_IP);			/* protocol type (ARP message) */
++	arp.hlen = 6;							/* hardware address length */
++	arp.plen = 4;							/* protocol address length */
++	arp.operation = htons(ARPOP_REQUEST);	/* ARP op code */
++	memcpy(arp.sHaddr, sender_mac, 6);		/* source hardware address */
++	/* tHaddr is zero-filled */				/* target hardware address */
++	memcpy(arp.tInaddr, &target_ip, sizeof(target_ip)); /* target IP address */
++	memset(&addr, 0, sizeof(addr));
++
++	//send to LAN interface(eth2)
++	safe_strncpy(addr.sa_data, interface, sizeof(addr.sa_data));
++
++	while (retry_send(sendto(s, &arp, sizeof(arp), 0, &addr, sizeof(addr))));
++
++	/* wait for arp reply, and check it */
++	timeout_ms = 2000;
++	do {
++		int r;
++		unsigned prevTime = monotonic_ms();
++
++		pfd[0].events = POLLIN;
++		r = safe_poll(pfd, 1, timeout_ms);
++
++		if (r < 0)
++			break;
++
++		if (r) {
++			r = safe_read(s, &arp, sizeof(arp));
++			if (r < 0)
++				break;
++
++			if (r >= ARP_MSG_SIZE
++			 && arp.operation == htons(ARPOP_REPLY)
++			 /* don't check it: Linux doesn't return proper tHaddr (fixed in 2.6.24?) */
++			 /* && memcmp(arp.tHaddr, from_mac, 6) == 0 */
++			 && *(uint32_t*)arp.sInaddr == target_ip
++			) {
++				//get reply, this IP is used
++				rv = 0;
++				break;
++			}
++		}
++		timeout_ms -= (unsigned)monotonic_ms() - prevTime + 1;
++
++	} while ((unsigned)timeout_ms <= 2000);
++
++ ret:
++	close(s);
++	//printf("%s(): %srp reply received for this address\n", __func__, rv ? "No a" : "A");
++	return rv;
++
++}
++#endif
+ #endif
+diff -uar dnsmasq-2.78.orig/src/dnsmasq.h dnsmasq-2.78/src/dnsmasq.h
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2021-01-07 16:23:44.392847913 +0800
++++ dnsmasq-2.78/src/dnsmasq.h	2021-01-07 16:24:56.920420362 +0800
+@@ -142,6 +142,11 @@
+ #include <priv.h>
+ #endif
+ 
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++#include <poll.h>
++#define LAN_INTERFACE "eth2"
++#endif
++
+ /* daemon is function in the C library.... */
+ #define daemon dnsmasq_daemon
+ 
+@@ -1655,6 +1660,13 @@
+ #endif
+ #endif
+ 
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++char* safe_strncpy(char *dst, const char *src, size_t size);
++int safe_poll(struct pollfd *ufds, nfds_t nfds, int timeout);
++ssize_t safe_read(int fd, void *buf, size_t count);
++int arpping(uint32_t target_ip, uint8_t *sender_mac, const char *interface);
++#endif
++
+ /* loop.c */
+ #ifdef HAVE_LOOP
+ void loop_send_probes(void);
+

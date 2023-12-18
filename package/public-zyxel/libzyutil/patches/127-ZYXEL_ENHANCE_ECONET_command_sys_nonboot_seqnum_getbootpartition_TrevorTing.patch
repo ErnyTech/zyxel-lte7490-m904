@@ -1,0 +1,51 @@
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-05-13 11:09:42.491254000 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-05-13 11:13:56.879254000 +0800
+@@ -631,6 +631,34 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilGetSpecifiedBootImageHeader(int bootFlag, void *booting_header)
++{
++	char sysCmd[128] = {0};
++	FILE *fptr = NULL;
++	struct trx_header *local_booting_header = (struct trx_header *)booting_header;
++
++	sprintf(sysCmd,FLASH_READ_CMD,BOOTIMG_HEADER_FILE,(long unsigned int)BOOTIMG_HEADER_SIZE,(long unsigned int)BOOTIMG_HEADER_OFFSET, \
++			(bootFlag==1)?SLAVE_ROOTFS_PARTITION_NAME:MAIN_ROOTFS_PARTITION_NAME);
++	system(sysCmd);
++
++	chmod(BOOTIMG_HEADER_FILE, 438); // 438(decimal) = 666(octal)
++	//printf("%s:sysCmd = %s\n", __FUNCTION__, sysCmd);
++
++    /*Read boot flag to buffer*/
++    if((fptr = fopen(BOOTIMG_HEADER_FILE, "rb")) == NULL) {
++		unlink(BOOTIMG_HEADER_FILE);
++        printf("Can't fopen %s\n", BOOTIMG_HEADER_FILE);
++        return ZCFG_INTERNAL_ERROR;
++    }
++
++	memset(local_booting_header, 0x0, BOOTIMG_HEADER_SIZE);
++	fread(local_booting_header, 1, (uint32_t)BOOTIMG_HEADER_SIZE, fptr);
++	//printf("%s : Current sequence is %d\n", __FUNCTION__, local_booting_header->imageSequence);
++	fclose(fptr);
++	unlink(BOOTIMG_HEADER_FILE);
++	return ZCFG_SUCCESS;
++}
++
+ zcfgRet_t zyUtilGetDualImageInfo(int bootFlag, char *fwversion)
+ {
+ 	char sysCmd[128] = {0};
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-05-13 11:09:42.491254000 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-05-13 11:14:05.647254000 +0800
+@@ -38,6 +38,7 @@
+ zcfgRet_t zyUtilIGetBootingFlag(int *boot_flag);
+ zcfgRet_t zyUtilISetBootingFlag(int boot_flag);
+ zcfgRet_t zyUtilGetBootImageHeader(void *booting_header);  //should conver to "struct trx_header"
++zcfgRet_t zyUtilGetSpecifiedBootImageHeader(int bootFlag, void *booting_header);  //should convert to "struct trx_header"
+ zcfgRet_t zyUtilGetDualImageInfo(int bootFlag, char *fwversion);
+ zcfgRet_t zyUtilGetWlanReserveAreaOffset(char*, unsigned int*);
+ #if defined(ZYXEL_BOARD_DETECT_BY_GPIO)

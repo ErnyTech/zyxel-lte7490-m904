@@ -1,0 +1,339 @@
+diff -urN mosquitto-1.6.7.orig/client/pub_client.c mosquitto-1.6.7/client/pub_client.c
+--- mosquitto-1.6.7.orig/client/pub_client.c	2022-06-07 11:08:38.593727000 +0800
++++ mosquitto-1.6.7/client/pub_client.c	2022-06-07 11:09:40.501727000 +0800
+@@ -322,6 +322,10 @@
+ 										argv = NULL;
+ 								}
+ 
++								if(cfg.mqtt_conn.bind_interfaceName){
++									mosq->mqtt_conn->bind_interfaceName = strdup(cfg.mqtt_conn.bind_interfaceName);
++								}
++
+ 								for(i=0;i<cfg.topic_count;i++){
+ 										//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
+ 										rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
+@@ -434,6 +438,10 @@
+ 								//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
+ 								rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
+ 							}
++
++							if(cfg.mqtt_conn.bind_interfaceName){
++								mosq->mqtt_conn->bind_interfaceName = strdup(cfg.mqtt_conn.bind_interfaceName);
++							}
+ 						}
+ 						#else
+ 						rc = my_publish(mosq, &mid_sent, cfg.topic, cfg.msglen, cfg.message, cfg.qos, cfg.retain);
+@@ -662,6 +670,11 @@
+ 		}
+ 		goto cleanup;
+ 	}
++
++	if(cfg.mqtt_conn.bind_interfaceName){
++		mosq->mqtt_conn->bind_interfaceName = strdup(cfg.mqtt_conn.bind_interfaceName);
++	}
++
+ 	if(cfg.debug){
+ 		mosquitto_log_callback_set(mosq, my_log_callback);
+ 	}
+diff -urN mosquitto-1.6.7.orig/lib/connect.c mosquitto-1.6.7/lib/connect.c
+--- mosquitto-1.6.7.orig/lib/connect.c	2022-06-07 11:08:38.581727000 +0800
++++ mosquitto-1.6.7/lib/connect.c	2022-06-07 11:09:40.001727000 +0800
+@@ -101,7 +101,12 @@
+ #if 0
+ 	return mosquitto_connect_bind(mosq, host, port, keepalive, NULL);
+ #else // for passing mqtt client parameter
+-	return mosquitto_connect_bind(mosq, host, port, keepalive, NULL, NULL);
++	if(mosq->mqtt_conn){
++		return mosquitto_connect_bind(mosq, host, port, keepalive, NULL, mosq->mqtt_conn);
++	}
++	else{
++		return mosquitto_connect_bind(mosq, host, port, keepalive, NULL, NULL);
++	}
+ #endif
+ }
+ 
+@@ -159,7 +164,12 @@
+ #if 0
+ 	return mosquitto__reconnect(mosq, false, NULL);
+ #else // for passing mqtt client parameters
+-	return mosquitto__reconnect(mosq, false, NULL, NULL);
++	if(mosq->mqtt_conn){
++		return mosquitto__reconnect(mosq, false, NULL, mosq->mqtt_conn);
++	}
++	else{
++		return mosquitto__reconnect(mosq, false, NULL, NULL);
++	}
+ #endif
+ }
+ 
+@@ -169,7 +179,12 @@
+ #if 0
+ 	return mosquitto__reconnect(mosq, false, NULL);
+ #else // for passing mqtt client parameters
+-	return mosquitto__reconnect(mosq, false, NULL, NULL);
++	if(mosq->mqtt_conn){
++		return mosquitto__reconnect(mosq, false, NULL, mosq->mqtt_conn);
++	}
++	else{
++		return mosquitto__reconnect(mosq, false, NULL, NULL);
++	}
+ #endif
+ }
+ 
+@@ -179,7 +194,12 @@
+ #if 0
+ 	return mosquitto__reconnect(mosq, true, NULL);
+ #else // for passing mqtt client parameters
+-	return mosquitto__reconnect(mosq, true, NULL, NULL);
++	if(mosq->mqtt_conn){
++		return mosquitto__reconnect(mosq, false, NULL, mosq->mqtt_conn);
++	}
++	else{
++		return mosquitto__reconnect(mosq, false, NULL, NULL);
++	}
+ #endif
+ }
+ 
+diff -urN mosquitto-1.6.7.orig/lib/mosquitto.c mosquitto-1.6.7/lib/mosquitto.c
+--- mosquitto-1.6.7.orig/lib/mosquitto.c	2022-06-07 11:08:38.581727000 +0800
++++ mosquitto-1.6.7/lib/mosquitto.c	2022-06-07 14:35:24.841727000 +0800
+@@ -107,6 +107,17 @@
+ 			}
+ 			return NULL;
+ 		}
++		mosq->mqtt_conn = NULL;
++		mosq->mqtt_conn = (mos_mqtt_conn_params_t*)mosquitto__calloc(1, sizeof(mos_mqtt_conn_params_t));
++		if(mosq->mqtt_conn){
++			mosq->mqtt_conn->bind_address = NULL;
++			mosq->mqtt_conn->bind_interfaceName = NULL;
++		}
++		else{
++			errno = ENOMEM;
++			mosquitto_destroy(mosq);
++			return NULL;
++		}
+ 	}else{
+ 		errno = ENOMEM;
+ 	}
+@@ -267,6 +278,14 @@
+ 	mosquitto__free(mosq->bind_address);
+ 	mosq->bind_address = NULL;
+ 
++	if(mosq->mqtt_conn){
++		mosquitto__free(mosq->mqtt_conn->bind_interfaceName);
++		mosq->mqtt_conn->bind_interfaceName = NULL;
++
++		mosquitto__free(mosq->mqtt_conn);
++		mosq->mqtt_conn = NULL;
++	}
++
+ 	/* Out packet cleanup */
+ 	if(mosq->out_packet && !mosq->current_out_packet){
+ 		mosq->current_out_packet = mosq->out_packet;
+diff -urN mosquitto-1.6.7.orig/lib/mosquitto_internal.h mosquitto-1.6.7/lib/mosquitto_internal.h
+--- mosquitto-1.6.7.orig/lib/mosquitto_internal.h	2022-06-07 11:08:38.577727000 +0800
++++ mosquitto-1.6.7/lib/mosquitto_internal.h	2022-06-07 11:09:40.001727000 +0800
+@@ -204,6 +204,96 @@
+ 	uint16_t inflight_maximum;
+ };
+ 
++#if 1 //copied from obuspa/mqtt.h
++typedef struct
++{
++    unsigned connect_retrytime;
++    unsigned interval_multiplier;
++    unsigned max_interval;
++} mos_mqtt_retry_params_t;
++typedef enum
++{
++    kMqttQos_Worst = 0,
++    kMqttQos_MostOnce = 0,       // TCP Fire and forget, the worst QOS
++    kMqttQos_AtLeastOnce = 1,    // Acknowledged Message, can be sent more than once
++    kMqttQos_ExactlyOnce = 2,    // Fully ackd message, always received once
++    kMqttQos_Best = 2,
++    kMqttQos_Default = kMqttQos_Best,
++} mos_mqtt_qos_t;
++typedef enum
++{
++    kMqttProtocol_3_1,           // Use v3.1 MQTT
++    kMqttProtocol_3_1_1,         // Use v3.1.1 MQTT
++    kMqttProtocol_5_0,           // Use v5.0 MQTT (recommended)
++    kMqttProtocol_Default = kMqttProtocol_5_0,
++    kMqttProtocol_Max,
++} mos_mqtt_protocolver_t;
++typedef enum
++{
++    kMqttTSprotocol_tcpip = 0,
++    kMqttTSprotocol_tls,
++    kMqttTSprotocol_Max,
++} mos_mqtt_tsprotocol_t;
++typedef struct
++{
++    char* host;                   // Hostname of the broker
++    char* bind_address;           // Bind address
++    char* bind_interfaceName;     // Bind address
++    unsigned int port;            // Port for broker
++    int keepalive;                // Keepalive setting for broker connection
++    char* username;               // Username to connect to broker
++    char* password;               // Password to connect to broker
++    int instance;                 // Client instance (Device.MQTT.Client.{i})
++    bool enable;
++
++    mos_mqtt_protocolver_t version;      // MQTT protocol version to use
++
++	//Defined in TR181: Device.LocalAgent.Controller.{i}.MTP.{i}.MQTT.Topic
++    char* topic; // Topic to publish to - controller should sub to this
++
++    // Response topic, may be used - or not. Agent should sub to this.
++    // Depends on the configuration in the broker (in v5.0)
++	//Defined in TR181: Device.LocalAgent.MTP.{i}.MQTT.ResponseTopicConfigured
++    char* response_topic;
++    mos_mqtt_qos_t publish_qos;
++
++    // V5 Params
++    char* client_id;
++
++    // mqtt parameters
++    char* name;
++    mos_mqtt_tsprotocol_t ts_protocol;
++    bool clean_session;
++    bool clean_start;
++    bool request_response_info;
++    bool request_problem_info;
++    char* response_information;
++
++#if 0
++    // These items are not currently used.
++    // Most of these items are not really required for essential MQTT
++    // operation. Some could be added easily though.
++    // TODO: Add these
++    unsigned int session_expiry;
++    unsigned int receive_max;
++    unsigned int max_packet_size;
++    unsigned int topic_alias_max;
++    bool will_enable;
++    unsigned int will_qos;
++    bool will_retain;
++    unsigned int will_delay_interval;
++    unsigned int will_message_expiry;
++    char* will_content_type;
++    char* will_response_topic;
++    char* will_topic;
++    char* will_value;
++    unsigned int pubmsg_expinterval;
++    unsigned int message_retrytime;
++    char* auth_method;
++#endif
++    mos_mqtt_retry_params_t retry;
++} mos_mqtt_conn_params_t;
++#endif
+ 
+ struct mosquitto {
+ 	mosq_sock_t sock;
+@@ -346,6 +436,7 @@
+ #ifdef WITH_EPOLL
+ 	uint32_t events;
+ #endif
++	mos_mqtt_conn_params_t *mqtt_conn;
+ };
+ 
+ #define STREMPTY(str) (str[0] == '\0')
+diff -urN mosquitto-1.6.7.orig/lib/net_mosq.h mosquitto-1.6.7/lib/net_mosq.h
+--- mosquitto-1.6.7.orig/lib/net_mosq.h	2022-06-07 11:08:38.577727000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.h	2022-06-07 11:18:34.757727000 +0800
+@@ -91,95 +91,4 @@
+ #define ENGINE_PIN "PIN"
+ #endif
+ 
+-#if 1 //copied from obuspa/mqtt.h
+-typedef struct
+-{
+-    unsigned connect_retrytime;
+-    unsigned interval_multiplier;
+-    unsigned max_interval;
+-} mos_mqtt_retry_params_t;
+-typedef enum
+-{
+-    kMqttQos_Worst = 0,
+-    kMqttQos_MostOnce = 0,       // TCP Fire and forget, the worst QOS
+-    kMqttQos_AtLeastOnce = 1,    // Acknowledged Message, can be sent more than once
+-    kMqttQos_ExactlyOnce = 2,    // Fully ackd message, always received once
+-    kMqttQos_Best = 2,
+-    kMqttQos_Default = kMqttQos_Best,
+-} mos_mqtt_qos_t;
+-typedef enum
+-{
+-    kMqttProtocol_3_1,           // Use v3.1 MQTT
+-    kMqttProtocol_3_1_1,         // Use v3.1.1 MQTT
+-    kMqttProtocol_5_0,           // Use v5.0 MQTT (recommended)
+-    kMqttProtocol_Default = kMqttProtocol_5_0,
+-    kMqttProtocol_Max,
+-} mos_mqtt_protocolver_t;
+-typedef enum
+-{
+-    kMqttTSprotocol_tcpip = 0,
+-    kMqttTSprotocol_tls,
+-    kMqttTSprotocol_Max,
+-} mos_mqtt_tsprotocol_t;
+-typedef struct
+-{
+-    char* host;                   // Hostname of the broker
+-    char* bind_address;           // Bind address
+-    char* bind_interfaceName;     // Bind address
+-    unsigned int port;            // Port for broker
+-    int keepalive;                // Keepalive setting for broker connection
+-    char* username;               // Username to connect to broker
+-    char* password;               // Password to connect to broker
+-    int instance;                 // Client instance (Device.MQTT.Client.{i})
+-    bool enable;
+-
+-    mos_mqtt_protocolver_t version;      // MQTT protocol version to use
+-
+-	//Defined in TR181: Device.LocalAgent.Controller.{i}.MTP.{i}.MQTT.Topic
+-    char* topic; // Topic to publish to - controller should sub to this
+-
+-    // Response topic, may be used - or not. Agent should sub to this.
+-    // Depends on the configuration in the broker (in v5.0)
+-	//Defined in TR181: Device.LocalAgent.MTP.{i}.MQTT.ResponseTopicConfigured
+-    char* response_topic;
+-    mos_mqtt_qos_t publish_qos;
+-
+-    // V5 Params
+-    char* client_id;
+-
+-    // mqtt parameters
+-    char* name;
+-    mos_mqtt_tsprotocol_t ts_protocol;
+-    bool clean_session;
+-    bool clean_start;
+-    bool request_response_info;
+-    bool request_problem_info;
+-    char* response_information;
+-
+-#if 0
+-    // These items are not currently used.
+-    // Most of these items are not really required for essential MQTT
+-    // operation. Some could be added easily though.
+-    // TODO: Add these
+-    unsigned int session_expiry;
+-    unsigned int receive_max;
+-    unsigned int max_packet_size;
+-    unsigned int topic_alias_max;
+-    bool will_enable;
+-    unsigned int will_qos;
+-    bool will_retain;
+-    unsigned int will_delay_interval;
+-    unsigned int will_message_expiry;
+-    char* will_content_type;
+-    char* will_response_topic;
+-    char* will_topic;
+-    char* will_value;
+-    unsigned int pubmsg_expinterval;
+-    unsigned int message_retrytime;
+-    char* auth_method;
+-#endif
+-    mos_mqtt_retry_params_t retry;
+-} mos_mqtt_conn_params_t;
+-#endif
+-
+ #endif

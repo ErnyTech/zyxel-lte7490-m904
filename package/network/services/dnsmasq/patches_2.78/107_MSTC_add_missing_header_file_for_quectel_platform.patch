@@ -1,0 +1,14 @@
+Index: dnsmasq-2.78/src/dhcp.c
+===================================================================
+--- dnsmasq-2.78.orig/src/dhcp.c
++++ dnsmasq-2.78/src/dhcp.c
+@@ -15,6 +15,9 @@
+ */
+ 
+ #include "dnsmasq.h"
++#ifdef TARGET_quectel
++#include <linux/sockios.h>
++#endif
+ 
+ #ifdef HAVE_DHCP
+ 

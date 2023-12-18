@@ -1,0 +1,122 @@
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-07-24 17:34:08.670322620 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-07-24 17:34:08.698322620 +0800
+@@ -50,6 +50,48 @@
+ zcfgRet_t memaccess(int type, unsigned long addr, unsigned long *value);
+ #endif
+ 
++typedef enum
++{
++    ZYLED_POWER_GREEN = 0,
++    ZYLED_POWER_RED,
++#ifdef ZYXEL_OPAL_EXTENDER
++    ZYLED_LINKQUALITY_GREEN,
++    ZYLED_LINKQUALITY_RED,
++    ZYLED_LINKQUALITY_AMBER,
++#endif
++    ZYLED_INDEX_MAX
++} ZYLED_INDEX;
++
++typedef enum
++{
++    ZYLED_ACTION_OFF = 0,
++    ZYLED_ACTION_BLINK,
++    ZYLED_ACTION_ON,
++    ZYLED_ACTION_MAX
++} ZYLED_ACTION;
++
++typedef enum
++{
++    ZYLED_RATE_NONE = 0,
++    ZYLED_RATE_SLOW,
++    ZYLED_RATE_FAST,
++    ZYLED_RATE_MAX
++} ZYLED_RATE;
++
++/*!
++*  zyUtilSetSoftwareLedState
++*  @param[in]  index       - ZYLED_INDEX
++*              action      - ZYLED_ACTION
++*              blink_rate  - ZYLED_RATE, may only work on broadcom platform, econet platform is fix rate
++*
++*  @return   ZCFG_INTERNAL_ERROR   - control fail
++*            ZCFG_SUCCESS          - control succee
++*
++*  @note set software led state
++*/
++int   zyUtilSetSoftwareLedState(ZYLED_INDEX index ,ZYLED_ACTION action, ZYLED_RATE blink_rate);
++
++
+ /*!
+  *  ZIGBEE reset (get state)
+  *
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-07-24 17:34:08.318322620 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-07-24 17:34:13.898322620 +0800
+@@ -609,7 +609,64 @@
+     return ZCFG_SUCCESS;
+ }
+ #endif
++void processLed(const int32_t ledType, const int32_t state)
++{
++	boardIoctl(BOARD_IOCTL_LED_CTRL, 0, NULL, ledType, state, NULL);
++}
++int32_t  get_BrcmLedIndex(ZYLED_INDEX index) {
++	int32_t LEDindex;
++	switch(index) {
++		case ZYLED_POWER_GREEN:
++			LEDindex = kLedPowerOn;
++			break;
++		case ZYLED_POWER_RED:
++			LEDindex = kLedPostFail;
++			break;
++#ifdef ZYXEL_OPAL_EXTENDER
++		case ZYLED_LINKQUALITY_GREEN:
++			LEDindex = kLedQualityGreen;
++			break;
++		case ZYLED_LINKQUALITY_RED:
++			LEDindex = kLedQualityRed;
++			break;
++		case ZYLED_LINKQUALITY_AMBER:
++			LEDindex = kLedQualityAmber;
++			break;
++#endif
++		default:
++			LEDindex = kLedStateOff;
++			break;
++	}
++	return LEDindex;
++}
++int32_t  get_BrcmLedState(ZYLED_ACTION action, ZYLED_RATE blink_rate) {
++	int32_t state = 0;
++	switch(action) {
++		case ZYLED_ACTION_OFF:
++			state = kLedStateOff;
++			break;
++		case ZYLED_ACTION_ON:
++			state = kLedStateOn;
++			break;
++		case ZYLED_ACTION_BLINK:
++			if(blink_rate == ZYLED_RATE_SLOW){
++				state = kLedStateSlowBlinkContinues;
++			}else if(blink_rate == ZYLED_RATE_SLOW){
++				state = kLedStateFastBlinkContinues;
++			}
++			break;
++		default:
++			state = kLedStateOff;
++			break;
++	}
++	return state;
++}
++zcfgRet_t zyUtilSetSoftwareLedState(ZYLED_INDEX index ,ZYLED_ACTION action, ZYLED_RATE blink_rate)
++{
+ 
++	processLed(get_BrcmLedIndex(index), get_BrcmLedState(action, blink_rate));
++	return ZCFG_SUCCESS;
++}
+ 
+ int boardIoctl(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf)
+ {

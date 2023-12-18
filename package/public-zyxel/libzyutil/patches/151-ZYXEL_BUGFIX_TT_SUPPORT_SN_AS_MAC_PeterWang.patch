@@ -1,0 +1,26 @@
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2020-12-02 11:32:05.410152972 +0800
++++ libzyutil-1.0/common.c	2020-12-02 16:30:37.913153032 +0800
+@@ -1731,13 +1731,21 @@
+ {
+     int i = 0, ret = -1;
+ 
++#ifdef ZYXEL_NEW_ATSN
++    if (len != 12)
++#else
+     if (len != SERIAL_NUM_STR_LEN)
++#endif
+     {
+         return ret;
+     }
+ 
+     ret = 0;
++#ifdef ZYXEL_NEW_ATSN
++    for (i = 0; i < 12; ++i)
++#else
+     for (i = 0; i < SERIAL_NUM_STR_LEN; ++i)
++#endif
+     {
+         if ( ! _common_isalnum(str[i]) )
+         {

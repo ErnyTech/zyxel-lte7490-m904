@@ -1,0 +1,36 @@
+Index: linux-3.10.14/drivers/net/raeth/Kconfig
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/Kconfig	2016-01-08 14:07:32.000000000 +0800
++++ linux-3.10.14/drivers/net/raeth/Kconfig	2020-11-10 16:27:35.414838000 +0800
+@@ -44,9 +44,9 @@
+         bool "Ralink Special Tag (0x810x)"
+         depends on RAETH && RT_3052_ESW
+ 
+-#config RAETH_JUMBOFRAME
+-#        bool "Jumbo Frame up to 4K bytes"
+-#        depends on RAETH && !(RALINK_RT3052 || RALINK_RT3352 || RALINK_RT5350 || RALINK_MT7628)
++config RAETH_JUMBOFRAME
++        bool "Jumbo Frame up to 4K bytes"
++        depends on RAETH && !(RALINK_RT3052 || RALINK_RT3352 || RALINK_RT5350 || RALINK_MT7628)
+ 
+ config RAETH_CHECKSUM_OFFLOAD
+         bool "TCP/UDP/IP checksum offload"
+Index: linux-3.10.14/drivers/net/raeth/raether.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/raether.c	2020-11-10 16:41:10.002838000 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2020-11-10 16:42:05.306838000 +0800
+@@ -657,12 +657,14 @@
+ 	dev->features &= ~NETIF_F_IP_CSUM; /* disable checksum TCP/UDP over IPv4 */
+ #endif // CONFIG_RAETH_CHECKSUM_OFFLOAD //
+ 
++#if 0//Should not or the bit of GDM1_JMB_EN.
+ #ifdef CONFIG_RAETH_JUMBOFRAME
+ 	regVal |= GDM1_JMB_EN;
+ #ifdef CONFIG_PSEUDO_SUPPORT
+ 	regVal2 |= GDM1_JMB_EN;
+ #endif
+ #endif
++#endif
+ 
+ 	sysRegWrite(GDMA1_FWD_CFG, regVal);
+ 	sysRegWrite(CDMA_CSG_CFG, regCsg);

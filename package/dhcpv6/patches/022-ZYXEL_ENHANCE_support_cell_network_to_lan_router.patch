@@ -1,0 +1,146 @@
+--- a/common.c
++++ b/common.c
+@@ -101,6 +101,7 @@
+ 
+ struct dhcp6c_Msg dhcp6cMsg = {0};
+ struct dhcp6s_Msg dhcp6sMsg = {0};
++struct dhcp6sRouter_Info dhcp6sRouterInfo = {0};
+ //struct json_object *dhcp6cMsg = NULL;
+ 
+ #ifdef __linux__
+--- a/common.h
++++ b/common.h
+@@ -167,6 +167,13 @@ struct dhcp6s_Msg {
+ 	char ClientIPv6poolName[64];
+ };
+ 
++struct dhcp6sRouter_Info
++{	
++	char ifname[32];
++	int isCellNetworktoLanRouter;
++	char ClientIPV6Linklocaladdr[49];
++};
++
+ extern int foreground;
+ extern int debug_thresh;
+ extern char *device;
+--- a/config.c
++++ b/config.c
+@@ -1839,11 +1839,15 @@ find_hostconf(duid)
+ 	}
+ 
+ 	for (host = host_conflist; host; host = host->next) {
++#ifndef ZYXEL_SUPPORT_CELL_NETWORK_TO_LAN_ROUTER //enable check dhcp6s client DUID,if not define
+ 		if (host->duid.duid_len == duid->duid_len &&
+ 		    memcmp(host->duid.duid_id, duid->duid_id,
+ 			   host->duid.duid_len) == 0) {
++#endif
+ 			return (host);
++#ifndef ZYXEL_SUPPORT_CELL_NETWORK_TO_LAN_ROUTER //enable check dhcp6s client DUID,if not define
+ 		}
++#endif
+ 	}
+ 
+ 	return (NULL);
+@@ -2399,9 +2403,11 @@ find_dynamic_hostconf(duid)
+ 	struct dynamic_hostconf *dynconf = NULL;
+ 
+ 	TAILQ_FOREACH(dynconf, &dynamic_hostconf_head, link) {
++#ifndef ZYXEL_SUPPORT_CELL_NETWORK_TO_LAN_ROUTER //enable check dhcp6s client DUID,if not define
+ 		if (dynconf->host->duid.duid_len == duid->duid_len &&
+ 			memcmp(dynconf->host->duid.duid_id, duid->duid_id,
+ 			   duid->duid_len) == 0)
++#endif
+ 			break;
+ 	}
+ 
+--- a/dhcp6s.c
++++ b/dhcp6s.c
+@@ -248,14 +248,17 @@ static int process_auth __P((struct dhcp
+ static inline char *clientstr __P((struct host_conf *, struct duid *));
+ static void release_dhcp6sinfo __P((struct dhcp6_listval *));
+ static void dhcp6sMsgToJsonFormat __P((struct json_object *));
++static void dhcp6sRouterInfoToJsonFormat __P((struct json_object *));
+ static void setleases_dhcp6sinfo __P((struct dhcp6_listval *, struct dhcp6_binding *));
+ static void resetleases_dhcp6sinfo __P((struct dhcp6_binding *));
+ static void addleases_dhcp6sLocalAddr __P((struct dhcp6_optinfo *, struct sockaddr *));
+ static void addjson_dhcp6sLeases __P((struct dhcp6_optinfo *, char *));
++static void addjson_dhcp6sRouterInfo __P((struct dhcp6_if *));
+ 
+ 
+ //add the dhcp6s json define
+ extern struct dhcp6s_Msg dhcp6sMsg;
++extern struct dhcp6sRouter_Info dhcp6sRouterInfo;
+ extern zcfgRet_t dhcp6sMsgSend(int, int, const char *);
+ 
+ int daemon_init(void) {
+@@ -1799,6 +1802,11 @@ react_request(ifp, pi, dh6, len, optinfo
+ 	/* send a reply message. */
+ 	(void)server6_send(DH6_REPLY, ifp, dh6, optinfo, from, fromlen,
+ 	    &roptinfo, relayinfohead, client_conf);
++		
++#ifdef ZYXEL_SUPPORT_CELL_NETWORK_TO_LAN_ROUTER
++	addjson_dhcp6sRouterInfo(ifp);
++#endif
++
+ 	// TODO: Add the local IPv6 address
+ 	addleases_dhcp6sLocalAddr(optinfo, from);
+ #ifdef ZYXEL_DHCPV6S_LEASE
+@@ -3012,7 +3020,9 @@ server6_send(type, ifp, origmsg, optinfo
+ 		    dhcp6msgstr(type), addr2str((struct sockaddr *)&dst));
+ 		return (-1);
+ 	}
+-
++#ifdef ZYXEL_SUPPORT_CELL_NETWORK_TO_LAN_ROUTER
++	sprintf(dhcp6sRouterInfo.ClientIPV6Linklocaladdr, "%s", addr2str((struct sockaddr *)&dst));
++#endif
+ 	dprintf(LOG_DEBUG, FNAME, "transmit %s to %s",
+ 	    dhcp6msgstr(type), addr2str((struct sockaddr *)&dst));
+ 
+@@ -3924,6 +3934,18 @@ dhcp6sMsgToJsonFormat(dhcp6sMsgBody)
+ }
+ 
+ static void
++dhcp6sRouterInfoToJsonFormat(dhcp6sMsgBody)
++	struct json_object *dhcp6sMsgBody;
++{
++	if(dhcp6sRouterInfo.isCellNetworktoLanRouter)
++	{
++		json_object_object_add(dhcp6sMsgBody, "isCellNetworktoLanRouter", json_object_new_int(dhcp6sRouterInfo.isCellNetworktoLanRouter));
++		json_object_object_add(dhcp6sMsgBody, "ifname", json_object_new_string(dhcp6sRouterInfo.ifname));
++		json_object_object_add(dhcp6sMsgBody, "ClientIPV6Linklocaladdr", json_object_new_string(dhcp6sRouterInfo.ClientIPV6Linklocaladdr));
++	}
++}
++
++static void
+ release_dhcp6sinfo(lvia)
+ 	struct dhcp6_listval *lvia;
+ {
+@@ -4282,3 +4304,27 @@ addjson_dhcp6sLeases(optinfo, poolname)
+ 
+ }
+ 
++static void
++addjson_dhcp6sRouterInfo(ifp)
++	struct dhcp6_if *ifp;
++{
++	char *msg = NULL;
++	int msgLen = 0;
++	struct json_object *dhcp6sJsonMsg = NULL;
++	sprintf(dhcp6sRouterInfo.ifname, "%s", ifp->ifname);
++	if(strncmp(dhcp6sRouterInfo.ClientIPV6Linklocaladdr, "fe80:", 5) == 0 && strcmp(dhcp6sRouterInfo.ifname, "") != 0) {
++		dhcp6sRouterInfo.isCellNetworktoLanRouter = true;
++	}
++	else {
++		dhcp6sRouterInfo.isCellNetworktoLanRouter = false;
++	}
++
++	dhcp6sJsonMsg = json_object_new_object();
++	dhcp6sRouterInfoToJsonFormat(dhcp6sJsonMsg);
++	msg = json_object_to_json_string(dhcp6sJsonMsg);
++	msgLen = strlen(msg) + 1;
++	dhcp6sMsgSend(ZCFG_MSG_DHCP6S_CLIENT_ROUTER_INFO, msgLen, msg);
++	memset(&dhcp6sRouterInfo, 0, sizeof(dhcp6sRouterInfo));
++	json_object_put(dhcp6sJsonMsg);
++}
++

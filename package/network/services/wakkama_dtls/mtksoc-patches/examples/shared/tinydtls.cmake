@@ -1,0 +1,26 @@
+# List source files
+set(TINYDTLS_SOURCES_DIR ${CMAKE_CURRENT_LIST_DIR}/tinydtls)
+set(TINYDTLS_SOURCES
+    ${TINYDTLS_SOURCES_DIR}/tinydtls.h
+    ${TINYDTLS_SOURCES_DIR}/dtls.h
+    ${TINYDTLS_SOURCES_DIR}/dtls.c
+    ${TINYDTLS_SOURCES_DIR}/crypto.c
+    ${TINYDTLS_SOURCES_DIR}/ccm.c
+    ${TINYDTLS_SOURCES_DIR}/hmac.c
+    ${TINYDTLS_SOURCES_DIR}/dtls_debug.c
+    ${TINYDTLS_SOURCES_DIR}/netq.c
+    ${TINYDTLS_SOURCES_DIR}/peer.c
+    ${TINYDTLS_SOURCES_DIR}/dtls_time.c
+    ${TINYDTLS_SOURCES_DIR}/session.c
+    ${TINYDTLS_SOURCES_DIR}/aes/rijndael.c
+    ${TINYDTLS_SOURCES_DIR}/sha2/sha2.c
+    ${TINYDTLS_SOURCES_DIR}/ecc/ecc.c)
+
+set(TINYDTLS_SOURCES_GENERATED
+    ${TINYDTLS_SOURCES_DIR}/dtls_config.h)
+
+
+set(TINYDTLS_SOURCES ${TINYDTLS_SOURCES} ${TINYDTLS_SOURCES_GENERATED})
+
+# Compile definitions for tinydtls
+set_source_files_properties(${TINYDTLS_SOURCES} PROPERTIES COMPILE_DEFINITIONS WITH_SHA256)

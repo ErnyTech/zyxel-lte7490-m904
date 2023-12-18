@@ -1,0 +1,22 @@
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2020-09-18 14:19:00.015458159 +0800
++++ libzyutil-1.0/Makefile	2020-09-18 14:19:31.861472910 +0800
+@@ -1,5 +1,5 @@
+ CURRENT_DIR = $(shell pwd)
+-COMMON_ZCFG_INCLUDE_DIR = $(CURRENT_DIR)/../../../private/apps/zcfg/include
++#COMMON_ZCFG_INCLUDE_DIR = $(CURRENT_DIR)/../../../private/apps/zcfg/include
+ 
+ #PLATFORM=broadcom
+ 
+@@ -7,8 +7,8 @@
+ LIBS_PATH = -L.
+ LINK_LIBS = -ljson -lcrypto -lzlog -lzos
+ 
+-INC_PATH = -I$(TOOLCHAIN)/include -I. -I$(COMMON_ZCFG_INCLUDE_DIR)
+-INC_PATH += -I./$(ZCFG_PLATFORM)
++#INC_PATH = -I$(TOOLCHAIN)/include -I$(COMMON_ZCFG_INCLUDE_DIR)
++INC_PATH +=  -I. -I./$(ZCFG_PLATFORM)
+ INC_PATH += -I./libzyutil_encrypt
+ 
+ ifeq ($(ZCFG_PLATFORM),BROADCOM)

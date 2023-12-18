@@ -1,0 +1,26 @@
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2020-11-05 19:05:50.807444883 +0800
++++ libzyutil-1.0/Makefile	2020-11-05 19:09:53.884258114 +0800
+@@ -195,3 +195,7 @@
+ ifeq ($(strip $(CONFIG_WIND_ITALY_CUSTOMIZATION)), y)
+ 	CFLAGS += -DWIND_ITALY_CUSTOMIZATION
+ endif
++
++ifeq ($(strip $(CONFIG_ZYXEL_SEND_NEW_CONNECTION_NOTIFICATION)), y)
++	CFLAGS += -DZYXEL_SEND_NEW_CONNECTION_NOTIFICATION
++endif
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2020-11-05 19:05:50.815444883 +0800
++++ libzyutil-1.0/common.c	2020-11-05 19:08:06.575449977 +0800
+@@ -1131,6 +1131,9 @@
+ 
+ 	json_object_object_foreach(sendObj, keys, val) {
+ 		if(!strcmp(keys,"body")) continue;
++#ifdef ZYXEL_SEND_NEW_CONNECTION_NOTIFICATION
++		if(!strcmp(keys,"EmailBodySuffix")) continue;
++#endif
+ 		// check if there are any file need to attach, set true
+ 		if(!strcmp(keys,"FilePath")) {
+ 			files = true;

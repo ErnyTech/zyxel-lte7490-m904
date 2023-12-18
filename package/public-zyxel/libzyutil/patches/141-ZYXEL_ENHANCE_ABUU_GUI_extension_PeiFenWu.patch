@@ -1,0 +1,86 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-10-13 14:38:07.799580743 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-10-13 14:40:49.921605092 +0800
+@@ -496,6 +496,33 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++
++zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion)
++{
++	char buf[64];
++	char sysCmd[1024] = {0};
++	FILE *fp = NULL;
++	char *action = NULL;
++
++
++	sprintf(sysCmd, "xdslctl --version 2>&1 | tee /var/DSLversion");
++	system(sysCmd);
++
++	fp = fopen("/var/DSLversion", "r");
++	if(fp != NULL){
++		while(fgets(buf, sizeof(buf), fp) != NULL){
++			buf[strlen(buf)-1] = '\0'; //remove '\n'
++			if((action = strstr(buf,"version -")) != NULL){
++				action= action + strlen("version - ");
++				strcpy(DSLversion, action);
++			}
++		}
++		fclose(fp);
++	}
++	return ZCFG_SUCCESS;
++}
++
++
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion)
+ {
+ 	ZY_FW_INFO zyFwInfoData;
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-10-13 14:38:07.779580744 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-10-13 14:41:08.085619253 +0800
+@@ -511,7 +511,12 @@
+ 
+ 	return ZCFG_SUCCESS;
+ }
+-
++zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion)
++{
++  //zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);
++  //zcfgLog(ZCFG_LOG_DEBUG, "<< %s\n", __FUNCTION__);
++  return ZCFG_SUCCESS;
++}	
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion)
+ {
+ 	struct trx_header trx_header_buff;
+Index: libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/QUALCOMM/libzyutil_wrapper.c	2020-10-13 14:38:07.779580744 +0800
++++ libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c	2020-10-13 14:41:22.391837990 +0800
+@@ -53,7 +53,12 @@
+   zcfgLog(ZCFG_LOG_DEBUG, "<< %s\n", __FUNCTION__);
+   return ZCFG_SUCCESS;
+ }
+-
++zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion)
++{
++  zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);
++  zcfgLog(ZCFG_LOG_DEBUG, "<< %s\n", __FUNCTION__);
++  return ZCFG_SUCCESS;
++}
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber)
+ {
+   zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-10-13 14:38:07.799580743 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-10-13 14:41:36.201089966 +0800
+@@ -22,6 +22,7 @@
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion);
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber);
+ zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber);
++zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion);
+ 
+ #ifdef BROADCOM_PLATFORM
+ zcfgRet_t zyUtilIGetDefaultGponSnPw(char *serianumber, char *password);

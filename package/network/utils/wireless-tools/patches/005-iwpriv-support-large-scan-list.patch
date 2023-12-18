@@ -1,0 +1,240 @@
+Index: wireless_tools.29/iwpriv.c
+===================================================================
+--- wireless_tools.29.orig/iwpriv.c	2016-05-03 19:44:18.048191816 +0800
++++ wireless_tools.29/iwpriv.c	2016-05-03 19:45:02.834126289 +0800
+@@ -246,6 +246,7 @@
+ /************************* SETTING ROUTINES **************************/
+ 
+ /*------------------------------------------------------------------*/
++#define BUF_SIZ                 (116*129)       /* equal to IW_SCAN_MAX_DATA (116 char/line, 128 AP + 1 title) */
+ /*
+  * Execute a private command on the interface
+  */
+@@ -259,12 +260,13 @@
+ 		int		priv_num)	/* Number of descriptions */
+ {
+   struct iwreq	wrq;
+-  u_char	buffer[4096];	/* Only that big in v25 and later */
++  u_char	*pbuffer = NULL;	/* to avoid stack overflow due to large array, allocate buffer dynamically */
+   int		i = 0;		/* Start with first command arg */
+   int		k;		/* Index in private description table */
+   int		temp;
+   int		subcmd = 0;	/* sub-ioctl index */
+   int		offset = 0;	/* Space for sub-ioctl index */
++  int		ret = -1;
+ 
+   /* Check if we have a token index.
+    * Do it now so that sub-ioctl takes precedence, and so that we
+@@ -284,7 +286,7 @@
+   if(k == priv_num)
+     {
+       fprintf(stderr, "Invalid command : %s\n", cmdname);
+-      return(-1);
++      goto quit;
+     }
+ 	  
+   /* Watch out for sub-ioctls ! */
+@@ -302,7 +304,7 @@
+ 	{
+ 	  fprintf(stderr, "Invalid private ioctl definition for : %s\n",
+ 		  cmdname);
+-	  return(-1);
++	  goto quit;
+ 	}
+ 
+       /* Save sub-ioctl number */
+@@ -318,6 +320,12 @@
+ #endif
+     }
+ 
++	pbuffer = malloc(BUF_SIZ);
++	if (pbuffer == NULL) {
++		fprintf(stderr, "Allocate memory failed\n");
++		goto quit;
++	}
++	
+   /* If we have to set some data */
+   if((priv[k].set_args & IW_PRIV_TYPE_MASK) &&
+      (priv[k].set_args & IW_PRIV_SIZE_MASK))
+@@ -333,7 +341,7 @@
+ 	  /* Fetch args */
+ 	  for(; i < wrq.u.data.length; i++) {
+ 	    sscanf(args[i], "%i", &temp);
+-	    buffer[i] = (char) temp;
++	    pbuffer[i] = (char) temp;
+ 	  }
+ 	  break;
+ 
+@@ -346,7 +354,7 @@
+ 	  /* Fetch args */
+ 	  for(; i < wrq.u.data.length; i++) {
+ 	    sscanf(args[i], "%i", &temp);
+-	    ((__s32 *) buffer)[i] = (__s32) temp;
++	    ((__s32 *) pbuffer)[i] = (__s32) temp;
+ 	  }
+ 	  break;
+ 
+@@ -359,14 +367,14 @@
+ 		wrq.u.data.length = priv[k].set_args & IW_PRIV_SIZE_MASK;
+ 
+ 	      /* Fetch string */
+-	      memcpy(buffer, args[i], wrq.u.data.length);
+-	      buffer[sizeof(buffer) - 1] = '\0';
++	      memcpy(pbuffer, args[i], wrq.u.data.length);
++	      pbuffer[BUF_SIZ - 1] = '\0';
+ 	      i++;
+ 	    }
+ 	  else
+ 	    {
+ 	      wrq.u.data.length = 1;
+-	      buffer[0] = '\0';
++	      pbuffer[0] = '\0';
+ 	    }
+ 	  break;
+ 
+@@ -382,13 +390,13 @@
+ 	    if(sscanf(args[i], "%lg", &(freq)) != 1)
+ 	      {
+ 		printf("Invalid float [%s]...\n", args[i]);
+-		return(-1);
++		goto quit;
+ 	      }    
+ 	    if(strchr(args[i], 'G')) freq *= GIGA;
+ 	    if(strchr(args[i], 'M')) freq *= MEGA;
+ 	    if(strchr(args[i], 'k')) freq *= KILO;
+ 	    sscanf(args[i], "%i", &temp);
+-	    iw_float2freq(freq, ((struct iw_freq *) buffer) + i);
++	    iw_float2freq(freq, ((struct iw_freq *) pbuffer) + i);
+ 	  }
+ 	  break;
+ 
+@@ -401,17 +409,17 @@
+ 	  /* Fetch args */
+ 	  for(; i < wrq.u.data.length; i++) {
+ 	    if(iw_in_addr(skfd, ifname, args[i],
+-			  ((struct sockaddr *) buffer) + i) < 0)
++			  ((struct sockaddr *) pbuffer) + i) < 0)
+ 	      {
+ 		printf("Invalid address [%s]...\n", args[i]);
+-		return(-1);
++		goto quit;
+ 	      }
+ 	  }
+ 	  break;
+ 
+ 	default:
+ 	  fprintf(stderr, "Not implemented...\n");
+-	  return(-1);
++	  goto quit;
+ 	}
+ 	  
+       if((priv[k].set_args & IW_PRIV_SIZE_FIXED) &&
+@@ -419,7 +427,7 @@
+ 	{
+ 	  printf("The command %s needs exactly %d argument(s)...\n",
+ 		 cmdname, priv[k].set_args & IW_PRIV_SIZE_MASK);
+-	  return(-1);
++	  goto quit;
+ 	}
+     }	/* if args to set */
+   else
+@@ -437,7 +445,7 @@
+       /* First case : all SET args fit within wrq */
+       if(offset)
+ 	wrq.u.mode = subcmd;
+-      memcpy(wrq.u.name + offset, buffer, IFNAMSIZ - offset);
++      memcpy(wrq.u.name + offset, pbuffer, IFNAMSIZ - offset);
+     }
+   else
+     {
+@@ -452,7 +460,7 @@
+       else
+ 	{
+ 	  /* Third case : args won't fit in wrq, or variable number of args */
+-	  wrq.u.data.pointer = (caddr_t) buffer;
++	  wrq.u.data.pointer = (caddr_t) pbuffer;
+ 	  wrq.u.data.flags = subcmd;
+ 	}
+     }
+@@ -462,7 +470,7 @@
+     {
+       fprintf(stderr, "Interface doesn't accept private ioctl...\n");
+       fprintf(stderr, "%s (%X): %s\n", cmdname, priv[k].cmd, strerror(errno));
+-      return(-1);
++      goto quit;
+     }
+ 
+   /* If we have to get some data */
+@@ -478,7 +486,7 @@
+       if((priv[k].get_args & IW_PRIV_SIZE_FIXED) &&
+ 	 (iw_get_priv_size(priv[k].get_args) <= IFNAMSIZ))
+ 	{
+-	  memcpy(buffer, wrq.u.name, IFNAMSIZ);
++	  memcpy(pbuffer, wrq.u.name, IFNAMSIZ);
+ 	  n = priv[k].get_args & IW_PRIV_SIZE_MASK;
+ 	}
+       else
+@@ -489,21 +497,21 @@
+ 	case IW_PRIV_TYPE_BYTE:
+ 	  /* Display args */
+ 	  for(j = 0; j < n; j++)
+-	    printf("%d  ", buffer[j]);
++	    printf("%d  ", pbuffer[j]);
+ 	  printf("\n");
+ 	  break;
+ 
+ 	case IW_PRIV_TYPE_INT:
+ 	  /* Display args */
+ 	  for(j = 0; j < n; j++)
+-	    printf("%d  ", ((__s32 *) buffer)[j]);
++	    printf("%d  ", ((__s32 *) pbuffer)[j]);
+ 	  printf("\n");
+ 	  break;
+ 
+ 	case IW_PRIV_TYPE_CHAR:
+ 	  /* Display args */
+-	  buffer[n] = '\0';
+-	  printf("%s\n", buffer);
++	  pbuffer[n] = '\0';
++	  printf("%s\n", pbuffer);
+ 	  break;
+ 
+ 	case IW_PRIV_TYPE_FLOAT:
+@@ -512,7 +520,7 @@
+ 	    /* Display args */
+ 	    for(j = 0; j < n; j++)
+ 	      {
+-		freq = iw_freq2float(((struct iw_freq *) buffer) + j);
++		freq = iw_freq2float(((struct iw_freq *) pbuffer) + j);
+ 		if(freq >= GIGA)
+ 		  printf("%gG  ", freq / GIGA);
+ 		else
+@@ -532,7 +540,7 @@
+ 	    /* Display args */
+ 	    for(j = 0; j < n; j++)
+ 	      {
+-		hwa = ((struct sockaddr *) buffer) + j;
++		hwa = ((struct sockaddr *) pbuffer) + j;
+ 		if(j)
+ 		  printf("           %.*s", 
+ 			 (int) strlen(cmdname), "                ");
+@@ -543,11 +551,16 @@
+ 
+ 	default:
+ 	  fprintf(stderr, "Not yet implemented...\n");
+-	  return(-1);
++	  goto quit;
+ 	}
+     }	/* if args to set */
+ 
+-  return(0);
++	ret = 0;
++quit:	
++	if (pbuffer) {
++		free(pbuffer);
++	}
++  return ret;
+ }
+ 
+ /*------------------------------------------------------------------*/
+

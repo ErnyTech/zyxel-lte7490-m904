@@ -1,0 +1,76 @@
+Index: busybox-1_20_1/networking/wget.c
+===================================================================
+--- busybox-1_20_1.orig/networking/wget.c	2021-08-09 16:04:59.345052000 +0800	
++++ busybox-1_20_1/networking/wget.c		2021-08-09 16:08:16.405052000 +0800
+@@ -45,6 +45,10 @@
+ //#define log_io(...) bb_error_msg(__VA_ARGS__)
+ #define log_io(...) ((void)0)
+ 
++#ifdef ZCFG_SUPPORT_TR369
++#define DIAG_RESULT_PATH "/var/diagResult"
++#endif
++
+ 
+ #if defined(ZCFG_SUPPORT)
+ enum {
+@@ -87,6 +91,9 @@
+ 	char *ifName;
+ 	char *dscp;
+ 	char *ethernetPriority;
++#ifdef ZCFG_SUPPORT_TR369
++	char *instanceNum;
++#endif
+ #endif
+ 	int output_fd;
+ 	int o_flags;
+@@ -211,6 +218,9 @@
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ 	char tmpBuf[21] = {0};
+ #endif	
++#ifdef ZCFG_SUPPORT_TR369
++	char dlDiagOuputPath[128];//TR-369
++#endif
+ 
+ 	if(!strcmp(DiagnosticsState, "Requested")) {
+ 		strcpy(DiagnosticsState, "Completed");
+@@ -244,6 +254,10 @@
+ 	json_object_object_add(diag_result, "TCPOpenRequestTime", json_object_new_string(TCPOpenRequestTime));
+ 	json_object_object_add(diag_result, "TCPOpenResponseTime", json_object_new_string(TCPOpenResponseTime));
+ 	//json_object_object_add(diag_result, "DownloadURL", json_object_new_string(DownloadURL));
++#ifdef ZCFG_SUPPORT_TR369
++	snprintf(dlDiagOuputPath, sizeof(dlDiagOuputPath), "%s.dlDiag%s", DIAG_RESULT_PATH, G.instanceNum);
++	json_object_to_file(dlDiagOuputPath, diag_result);
++#endif
+ 
+ 	payload = json_object_to_json_string(diag_result);
+ 	payloadLen = strlen(payload) + 1;
+@@ -1465,6 +1479,9 @@
+         "interfaceName"      Required_argument "i"
+         "DSCP"               Required_argument "d"
+         "ethernetPriority"   Required_argument "M"
++#ifdef ZCFG_SUPPORT_TR369
++        "instanceNum"   	 Required_argument "N"
++#endif
+ #endif
+ 		;
+ #endif
+@@ -1488,11 +1505,18 @@
+ #endif
+ 	opt_complementary = "-1" IF_FEATURE_WGET_TIMEOUT(":T+") IF_FEATURE_WGET_LONG_OPTIONS(":\xfe::");
+ #if defined(ZCFG_SUPPORT) //TR143
+-	getopt32(argv, "csqO:P:Y:U:T:i:wd:M:R:" /*ignored:*/ "t:",
++	getopt32(argv, "csqO:P:Y:U:T:i:wd:M:"
++#ifdef ZCFG_SUPPORT_TR369
++			"N:"
++#endif
++			"R:" /*ignored:*/ "t:",
+ 		&G.fname_out, &G.dir_prefix,
+ 		&G.proxy_flag, &G.user_agent,
+ 		IF_FEATURE_WGET_TIMEOUT(&G.timeout_seconds) IF_NOT_FEATURE_WGET_TIMEOUT(NULL),
+ 		&G.ifName, &G.dscp, &G.ethernetPriority,
++#ifdef ZCFG_SUPPORT_TR369
++		&G.instanceNum,
++#endif
+ 		NULL /* -t RETRIES */
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
+ 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)

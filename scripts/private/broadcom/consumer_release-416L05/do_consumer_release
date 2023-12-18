@@ -1,0 +1,603 @@
+#!/bin/bash
+
+##
+## BCM963xx Consumer Release Script.
+##
+## This script must be run from the bcm963xx/release directory.
+## The final tarball will also appear in this directory.
+##
+
+# Automatically figure out where we are
+# The old version of this script effectively had dr_base_arg=/opt
+
+####do_consumer_release $(CONFIG_BRCM_SDK_VERSION) $(KERNEL)[3.4] /tmp/$(BCM_RELEASE_TOOL_DIR) $(RELEASE_PATH) $(LINUX_DIR) $(LINUX_SOURCE) $(CONFIG_CUSTOM_KPATCH_PREFIX)################
+dr_user=`whoami`
+dr_date=`date +%m%d%y`
+dr_rel_ver="broadcom_sdk_${1}_pkg"
+tarball_dr_name="broadcom-sdk-${1}"
+dr_base_dir=$BCM_BUILD_DIR
+dr_profiles_to_build=$BCM_PROFILE
+dr_output_dir=${3}/out
+
+dr_bcmdrivers_subdir=bcmdrivers
+dr_bcmdrivers_broadcom_subdir=$dr_bcmdrivers_subdir/broadcom
+dr_bcmdrivers_opensource_subdir=$dr_bcmdrivers_subdir/opensource
+dr_bcmenet_subdir=$dr_bcmdrivers_opensource_subdir/net/enet
+
+dr_kernel_patch_dir=${4}/target/linux/brcm963xx/${7}files-${2}
+dr_kernel_subdir=${5}
+kernel_linux_version=linux-${6}
+
+dr_bcminstall_dir=$dr_base_dir/release
+dr_bcminstall_name=consumer_install
+
+rm -rf $dr_base_dir/patches $dr_base_dir/.pc/ $dr_base_dir/.quilt*
+
+
+
+echo "BCM963xx Consumer Release Procedure on SDK 4.16L.05"
+echo ""
+echo "This script builds BCM963xx DSL Router images based on Linux and then creates"
+echo "a consumer release archive.  The release archive contains GPL source code"
+echo "and Broadcom proprietary object code."
+echo ""
+echo "THIS SCRIPT DELETES SOURCE FILES.  IT SHOULD BE RUN FROM A COPY OF THE"
+echo "MASTER SOURCE TREE."
+echo ""
+echo "The release version is \"$dr_rel_ver\""
+echo "The tar output directory is \"$dr_output_dir\""
+echo ""
+echo ""
+
+#########################START########################
+mkdir -p $dr_output_dir > /dev/null
+rm -f $dr_output_dir/* > /dev/null
+rm -f $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/savemods.tar >& /dev/null
+#############################################################################
+wireless_driver_makefile()
+{
+cat << '**********'    
+obj-$(CONFIG_BCM_WLAN) += wl.o
+wl-objs += wl_dep.o
+
+$(obj)/wl_dep.o:
+	cp $(obj)/wl$(BCM_PROFILE).o_save $(obj)/wl_dep.o
+	if [ ! -d $(BCM_INSTALL_DIR)/etc/wlan ]; then \
+		rm -f $(BCM_INSTALL_DIR)/etc/wlan; \
+		install -d $(BCM_INSTALL_DIR)/etc/wlan; \
+	fi;
+	for x in $(obj)/*map.bin_save; do \
+		cp $$x $${x%_save}; \
+		install -m 755 $${x%_save} $(BCM_INSTALL_DIR)/etc/wlan; \
+	done
+	for x in $(obj)/*vars.bin_save; do \
+		cp $$x $${x%_save}; \
+		install -m 755 $${x%_save} $(BCM_INSTALL_DIR)/etc/wlan; \
+	done
+**********
+}
+
+dhd_driver_makefile()
+{
+cat << '**********'    
+obj-$(CONFIG_BCM_WLAN) += dhd.o 
+dhd-objs += dhd_dep.o
+
+$(obj)/dhd_dep.o:
+	cp $(obj)/dhd$(BCM_PROFILE).o_save $(obj)/dhd_dep.o
+	if [ ! -d $(BCM_INSTALL_DIR)/etc/wlan/dhd ]; then \
+		rm -f $(BCM_INSTALL_DIR)/etc/wlan/dhd; \
+		install -d $(BCM_INSTALL_DIR)/etc/wlan/dhd; \
+	fi;
+	for x in $(obj)/*map.bin_save; do \
+		cp $$x $${x%_save}; \
+		install -m 755 $${x%_save} $(BCM_INSTALL_DIR)/etc/wlan; \
+	done
+	for x in $(obj)/*vars.bin_save; do \
+		cp $$x $${x%_save}; \
+		install -m 755 $${x%_save} $(BCM_INSTALL_DIR)/etc/wlan; \
+	done
+**********
+}
+
+wlemf_driver_makefile()
+{
+cat << '**********'    
+obj-$(CONFIG_BCM_WLAN) += wlemf.o 
+wlemf-objs += wlemf_dep.o
+
+$(obj)/wlemf_dep.o:
+	cp $(obj)/wlemf$(BCM_PROFILE).o_save $(obj)/wlemf_dep.o
+**********
+}
+#############################################################################
+
+
+
+##
+## Save File(s).
+##
+for dr_profile in $dr_profiles_to_build
+do
+    # Backup private files in filesystem.
+    echo "======>Build of PROFILE $dr_profile complete.  Saving filesystem..."
+    cd  $dr_base_dir/targets/$dr_profile/fs.install
+    tar czf $dr_base_dir/../filesystem.tgz .
+    #cd $dr_base_dir
+
+    #
+    # Save the kernel driver module object file for each proprietary module
+    # that was built.
+    #
+    echo "1---->bcmdriver/broadcom/net/wl"
+    cd $dr_base_dir/$dr_bcmdrivers_broadcom_subdir
+
+    #########################################################################
+    # Save wireless driver objects.  This can not be done in the ... 
+    # ... for dr_modobjs ... loop below, because the searching in Makefiles
+    # yields wrong results for wireless, causing the loop to fail.
+
+    chip_ver=`grep '^BRCM_CHIP=' $dr_base_dir/targets/$dr_profile/$dr_profile|cut -d'=' -f2`
+    echo "chip_ver=$chip_ver"
+    dr_dir=net/wl/bcm9$chip_ver
+    echo "dr_dir=$dr_dir"
+    dr_dir=net/wl/`readlink $dr_dir`
+    echo "dr_dir=$dr_dir"
+
+    if [ -e  "${dr_dir}/wl.o" ]; then
+    cp $dr_dir/wl.o $dr_dir/wl${dr_profile}.o_save
+    elif [ -e  "${dr_dir}/build/wlobj-wlconfig_lx_wl_dslcpe_pci_ap_2nv-kdb/wl.o" ]; then
+    cp $dr_dir/build/wlobj-wlconfig_lx_wl_dslcpe_pci_ap_2nv-kdb/wl.o $dr_dir/wl${dr_profile}.o_save
+    else
+    echo "Un-usable wl.o"
+    fi
+    if [ -e  "${dr_dir}/dhd.o" ]; then
+    cp $dr_dir/dhd.o $dr_dir/dhd${dr_profile}.o_save
+    elif [ -e  "$dr_dir/build/dhdobj-dhdconfig_lx_dhd_dslcpe_pci_ap_2nv-kdb/dhd.o" ]; then
+    cp $dr_dir/build/dhdobj-dhdconfig_lx_dhd_dslcpe_pci_ap_2nv-kdb/dhd.o $dr_dir/dhd${dr_profile}.o_save
+    else
+    echo "Un-usable dhd.o"
+    fi
+    find ${dr_dir} -name *map.bin -exec cp "{}" ${dr_dir} ";"
+    find ${dr_dir} -maxdepth 1 -name "*map.bin" -exec mv "{}" "{}"_save ";"
+    find ${dr_dir} -name *vars.bin -exec cp "{}" ${dr_dir} ";"
+    find ${dr_dir} -maxdepth 1 -name "*vars.bin" -exec mv "{}" "{}"_save ";"
+
+    if [ -e  "${dr_dir}/dhd.o" -o -e "$dr_dir/build/dhdobj-dhdconfig_lx_dhd_dslcpe_pci_ap_2nv-kdb/dhd.o" ]; then
+	dhd_driver_makefile > ${dr_dir}/Makefile_save
+	wireless_driver_makefile >> ${dr_dir}/Makefile_save
+    else
+	wireless_driver_makefile > ${dr_dir}/Makefile_save
+    fi
+
+    if [ -e  "${dr_dir}/wlemf.o" ]; then
+	cp $dr_dir/wlemf.o $dr_dir/wlemf${dr_profile}.o_save
+	wlemf_driver_makefile >> ${dr_dir}/Makefile_save
+    elif [ -e  "${dr_dir}/main/src/emf/wlemf.o" ]; then
+	cp $dr_dir/main/src/emf/wlemf.o $dr_dir/wlemf${dr_profile}.o_save
+	wlemf_driver_makefile >> ${dr_dir}/Makefile_save
+    else
+    echo "Un-usable wlemf.o"
+    fi
+
+    files_to_save=" \
+        ${dr_dir}/wl${dr_profile}.o_save \
+        ${dr_dir}/dhd${dr_profile}.o_save \
+        ${dr_dir}/wlemf${dr_profile}.o_save \
+        ${dr_dir}/Makefile_save \
+        ${dr_dir}/include/linux_osl_dslcpe_pktc.h \
+        ${dr_dir}/main/src/include/linux_osl_dslcpe_pktc.h \
+		net/wl/shared/impl1/linux_osl_dslcpe_pktc.h \
+        `find ${dr_dir} -maxdepth 1 -name "*map.bin_save"` \
+        `find ${dr_dir} -maxdepth 1 -name "*vars.bin_save"` \
+    "
+
+    echo "Generating $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/savemods.tar for restore it later......."
+    for x in $files_to_save; do
+        tar frv ./savemods.tar $x
+    done
+    #########################################################################
+    
+    # Create a list of the possible modules.
+    dr_modobjs=`find */ -name "Makefile" -exec grep "^[[:space:]]*obj.*CONFIG_" "{}" ";" | sed 's/^[[:space:]]*//g' | cut -d' ' -f3 | uniq`
+    echo "2---->bcmdriver/broadcom/ other modules"
+    echo "===> $dr_modobjs"
+
+    # for each kernel driver module in a list of possible modules...
+    for dr_modobj in $dr_modobjs
+    do
+        echo "===> Now processing $dr_modobj"
+        dr_dir=`find . -name "$dr_modobj" -printf '%h\n'`
+        if [ "$dr_dir" != "" ] ; then
+            dr_bn=`basename $dr_dir`
+        else
+            dr_bn=
+        fi
+
+        echo "===> dr_bn is $dr_bn"
+
+        # Process modules that exist (the .o file exists) in a directory that
+        # begins with "impl".
+        if [ "${dr_bn:0:4}" == "impl" ] ; then
+
+            # Copy the module to a different name.
+            dr_modname=${dr_modobj/.o/}
+            cp $dr_dir/$dr_modobj $dr_dir/${dr_modname}${dr_profile}.o_save
+
+            case $dr_modname in
+            adsldd)
+                # Create consumer makefile for adsl module obj.
+                grep "^[[:space:]]*obj.*CONFIG_" ${dr_dir}/Makefile > ${dr_dir}/Makefile_save
+                echo -e "\n${dr_modname}-objs += ${dr_modname}_dep.o\n\n\$(obj)/${dr_modname}_dep.o:\n\tcp \$(obj)/${dr_modname}\$(BCM_PROFILE).o_save \$(obj)/${dr_modname}_dep.o\n\tcp \$(obj)/adsl_phy\$(BCM_PROFILE).bin_save \$(obj)/adsl_phy.bin" >> ${dr_dir}/Makefile_save
+
+                # Save ADSL PHY bin file for this profile.
+                cp $dr_dir/adsl_phy.bin $dr_dir/adsl_phy${dr_profile}.bin_save
+                if [  -e  "$dr_dir/adsl_phy0.bin" ]; then
+                    cp $dr_dir/adsl_phy0.bin $dr_dir/adsl_phy0${dr_profile}.bin_save
+                    tar frv ./savemods.tar $dr_dir/adsl_phy0${dr_profile}.bin_save
+                    echo -e "\tif [  -e  \$(obj)/adsl_phy0\$(BCM_PROFILE).bin_save ]; then \\" >> ${dr_dir}/Makefile_save
+                    echo -e "\t\tcp \$(obj)/adsl_phy0\$(BCM_PROFILE).bin_save \$(obj)/adsl_phy0.bin; \\" >> ${dr_dir}/Makefile_save
+                    echo -e "\tfi" >> ${dr_dir}/Makefile_save
+                fi
+                if [  -e  "$dr_dir/adsl_phy1.bin" ]; then
+                    cp $dr_dir/adsl_phy1.bin $dr_dir/adsl_phy1${dr_profile}.bin_save
+                    tar frv ./savemods.tar $dr_dir/adsl_phy1${dr_profile}.bin_save
+                    echo -e "\tif [  -e  \$(obj)/adsl_phy1\$(BCM_PROFILE).bin_save ]; then \\" >> ${dr_dir}/Makefile_save
+                    echo -e "\t\tcp \$(obj)/adsl_phy1\$(BCM_PROFILE).bin_save \$(obj)/adsl_phy1.bin; \\" >> ${dr_dir}/Makefile_save
+                    echo -e "\tfi" >> ${dr_dir}/Makefile_save
+                fi
+                echo -e "\n\n" >> ${dr_dir}/Makefile_save
+
+                # Archive the "*_save" files and ADSL PHY bin file temporarily.
+                tar frv ./savemods.tar $dr_dir/${dr_modname}${dr_profile}.o_save ${dr_dir}/Makefile_save $dr_dir/adsl_phy${dr_profile}.bin_save >& /dev/null
+            ;;
+
+            *)
+                # Create consumer makefile for module obj.
+                if [  ! -e  "${dr_dir}/Makefile_save" ]; then
+                    # Create Makefile_save only if it is not already done. Otherwise, a folder with 2 or more object files
+                    # will cause Makefile_save created for one object file to be overriden by the Makefile_save created by 
+                    # the next object file.
+                    if [ "${dr_modname}" == "bcm3450" ] ; then
+                        # Special case for i2c, need to preserve ifdef
+                        echo -e "obj-\$(CONFIG_BCM_I2C_CHIP) += bcm3450.o" > ${dr_dir}/Makefile_save
+                        #echo -e "ifneq (\$(strip \$(BRCM_DRIVER_GPON)),)" >> ${dr_dir}/Makefile_save
+                        echo -e "obj-\$(CONFIG_BCM_I2C_CHIP) += gpon_i2c.o" >> ${dr_dir}/Makefile_save
+                        echo -e "obj-\$(CONFIG_BCM_I2C_CHIP) += laser_i2c.o" >> ${dr_dir}/Makefile_save
+                        #echo -e "endif" >> ${dr_dir}/Makefile_save
+                    else
+                        grep "^[[:space:]]*obj.*CONFIG_" ${dr_dir}/Makefile > ${dr_dir}/Makefile_save
+                    fi
+                fi
+                echo -e "\n${dr_modname}-objs += ${dr_modname}_dep.o\n" >> ${dr_dir}/Makefile_save
+                echo -e "\$(obj)/${dr_modname}_dep.o:" >> ${dr_dir}/Makefile_save
+                echo -e "\tcp \$(obj)/${dr_modname}\$(BCM_PROFILE).o_save \$(obj)/${dr_modname}_dep.o\n" >> ${dr_dir}/Makefile_save
+                echo -e "applinks:\n" >> ${dr_dir}/Makefile_save
+
+
+                # Archive the "*_save" files temporarily.  After all profiles
+                # have been built, proprietary module source files will be
+                # deleted and this archive will be restored.
+                tar frv ./savemods.tar $dr_dir/${dr_modname}${dr_profile}.o_save ${dr_dir}/Makefile_save >& /dev/null
+            ;;
+            esac
+        fi
+    done
+    
+    # Create a minimal softdsl/AdslCoreDefs.h which is used by prom.c
+    echo "2---->Generating softdsl/AdslCoreDefs.h header file to kernel"
+    mkdir -p $dr_kernel_patch_dir/arch/mips/bcm963xx/softdsl
+    cd $dr_kernel_patch_dir/arch/mips/bcm963xx/
+
+    # read ADSL_PHY_SDRAM_BIAS and ADSL_PHY_SDRAM_PAGE_SIZE from appro locations
+    # 6368
+    echo "#if defined(CONFIG_BCM96368)" > softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+            echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore6368/adsl_defs.h
+
+    # 6362
+    echo "#elif defined(CONFIG_BCM96362)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore6362/adsl_defs.h
+
+    # 6328 (use the same file as for 6362
+    echo "#elif defined(CONFIG_BCM96328)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore6362/adsl_defs.h
+
+    # 63268
+    echo "#elif defined(CONFIG_BCM963268)" >> softdsl/AdslCoreDefs.h
+    echo "#if defined(SUPPORT_DSL_BONDING)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]]
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore63268bnd5/adsl_defs.h
+
+    echo "#else" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]]
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore63268/adsl_defs.h
+    echo "#endif" >> softdsl/AdslCoreDefs.h
+
+    # 63381
+    echo "#elif defined(CONFIG_BCM963381)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore63381/adsl_defs.h
+
+    # 63138
+    echo "#elif defined(CONFIG_BCM963138)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore63138/adsl_defs.h
+
+    # 63148
+    echo "#elif defined(CONFIG_BCM963148)" >> softdsl/AdslCoreDefs.h
+    while read LINE
+    do
+        if [[ "$LINE" =~ " ADSL_PHY_SDRAM_BIAS " || "$LINE" =~ " ADSL_PHY_SDRAM_PAGE_SIZE " ]] 
+        then
+                echo $LINE >> softdsl/AdslCoreDefs.h
+        fi
+    done < $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/char/adsl/impl1/adslcore63148/adsl_defs.h
+
+    echo "#else" >> softdsl/AdslCoreDefs.h
+    echo "#define ADSL_PHY_SDRAM_BIAS 0x100000" >> softdsl/AdslCoreDefs.h
+    echo "#define ADSL_PHY_SDRAM_PAGE_SIZE 0x200000" >> softdsl/AdslCoreDefs.h
+    echo "#endif" >> softdsl/AdslCoreDefs.h
+
+    echo "#define ADSL_SDRAM_IMAGE_SIZE (ADSL_PHY_SDRAM_PAGE_SIZE - ADSL_PHY_SDRAM_BIAS)" >> softdsl/AdslCoreDefs.h
+
+    # Make a copy of to ARM directory as well
+    mkdir -p $dr_kernel_patch_dir/arch/arm/mach-bcm963xx/softdsl
+    cp softdsl/AdslCoreDefs.h $dr_kernel_patch_dir/arch/arm/mach-bcm963xx/softdsl/
+
+    # save files generated from data model.
+    # A make clean now deletes all of those files, but we need to preserve them
+    # for the consumer
+    echo "3---->data-model ing....(Save files generated from data model, generating $dr_base_dir/savemdmheaderfiles.tar)"
+    cd $dr_base_dir
+    if ! [ -a ./savemdmheaderfiles.tar ] ; then
+        tar cfv ./savemdmheaderfiles.tar userspace/public/include/{mdm_object.h,mdm_objectid.h,mdm_params.h,mdm_validstrings.h}
+    fi
+
+    echo "4---->process RTK switch ing...(generateing $dr_bcmenet_subdir/rtkmods.tar for restore it later.......)"
+    if [[ $BCM_PROFILE == vmg3925 ]]; then
+        cd $dr_bcmenet_subdir
+        tar frv ./rtkmods.tar ./`readlink bcm9$chip_ver`/ethsw.o
+        tar frv ./rtkmods.tar ./`readlink bcm9$chip_ver`/bcmenet.o
+        rm -f ./`readlink bcm9$chip_ver`/ethsw.c
+        rm -f ./`readlink bcm9$chip_ver`/bcmenet.c
+
+        echo "Need to backup RTK switch driver for 416L05, backup it."
+        for x in `ls ./rtk_sw_api/*.o`; do
+            tar frv ./rtkmods.tar $x
+        done
+        echo "remove RTK switch source codes in bcmenet."
+        rm -rf ./rtk_sw_api/*.c ./rtk_sw_api/*.h
+    else
+        echo "No need to backup RTK switch driver, ignore it."
+    fi
+
+    cd $dr_base_dir
+    echo ""
+    echo "======> do clean"
+    make PROFILE=$dr_profile clean
+
+done
+
+echo ""
+echo "======> Done with building and saving... start final set of operations"
+
+##
+## Delete proprietary source files and restore the proprietary object files.
+##
+cd $dr_base_dir/$dr_bcmdrivers_broadcom_subdir
+
+# Save include files that are needed by open source (GPL'd) programs and
+# delete the rest.
+echo "5---->gen $dr_base_dir/$dr_bcmdrivers_broadcom_subdir/saveinc.tar ing...."
+echo "===> save kernel header files"
+tar cvf ./saveinc.tar include/bcm963xx/{adsldrv.h,atmapidrv.h,bcmatmapi.h,DiagDef.h,AdslMibDef.h,bcmadsl.h,bcmxdsl.h,VdslInfoDef.h,bpm.h,ingqos.h,wan_drv.h}
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/portMirror.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/portMirror.h
+fi
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/bcm_OS_Deps.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/bcm_OS_Deps.h
+fi
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/bcm_log_mod.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/bcm_log_mod.h
+fi
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/bcm_log.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/bcm_log.h
+fi
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/fap.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/fap.h
+fi
+if [  -e  "$dr_base_dir/$dr_bcmdrivers_broadcom_subdir/include/bcm963xx/pktHdr.h" ]; then
+tar frv ./saveinc.tar include/bcm963xx/pktHdr.h
+fi
+tar frv ./saveinc.tar include/bcm963xx/{bcmsw_api.h,bcmmii_exports.h}
+tar frv ./saveinc.tar char/fap/impl1/{fap_hw.h,fap_hw_6362.h,fap_hw_63268.h,fap_hw_6828.h,fap_hw_6818.h,fap_task.h,fap_dqm.h,fap_dqmHost.h,fap_dll.h,fap_packet.h,fap_slob.h,fap_dynmem.h,fap_tm.h,fap_wfd_inline.h,fap_swq_common.h}
+tar frv ./saveinc.tar char/dspapp/impl1/getDspModSizes.sh
+tar frv ./saveinc.tar char/fap/impl1/4ke/{fap4ke_init.h,fap4ke_local.h,fap4ke_packet.h,fap4ke_task.h,fap4ke_msg.h,fap4ke_iopDma.h,fap4ke_dpe.h,fap4ke_timers.h,fap4ke_mailBox.h,fap4ke_printer.h,fap4ke_memory.h,fap4ke_xtmrt.h,fap4ke_dqm.h,fap4ke_irq.h,fap4keLib_types.h,fap4keLib_string.h,fap4keLib_snprintf.h,fap4ke_gso.h,fap4ke_tm.h,fap4ke_swq.h,fap4ke_perf.h}
+rm -f include/bcm963xx/*
+
+# Delete proprietary kernel driver module source files.
+echo "6---->Delete proprietary kernel driver module source files"
+for dr_dir in *
+do
+    echo "===>deleting proprietary kernel driver module $dr_dir"
+    if [ -d $dr_dir ] ; then
+        rm -rf $dr_dir
+    fi
+done
+
+cd $dr_base_dir/$dr_bcmdrivers_broadcom_subdir
+
+# Restore proprietary kernel driver module object files.
+echo "===> restore saveinc.tar"
+tar xvf ./saveinc.tar
+rm ./saveinc.tar
+
+echo "===> restore savemods.tar"
+tar xfv ./savemods.tar
+rm -f ./savemods.tar
+
+# currently, the Makefile always tries to build gpon
+mkdir -p char/gpon/impl2
+
+find . -type d -name "impl*" -exec mv "{}"/Makefile_save "{}"/Makefile ";" >/dev/null 2>&1
+
+# Clean out data-model directory and create simple Makefile
+cd $dr_base_dir
+rm -f data-model/* >/dev/null 2>&1
+echo -e "all:\n\nclean:\n\n" > data-model/Makefile
+
+
+# Restore saved mdm header files
+cd $dr_base_dir
+echo "===> restore mdm header files"
+tar xfv ./savemdmheaderfiles.tar
+rm -f ./savemdmheaderfiles.tar
+
+# restore saved rtk switch object files
+if [  -e  "$dr_bcmenet_subdir/rtkmods.tar" ]; then
+    cd $dr_bcmenet_subdir
+    echo "===> restore rtk switch object files"
+    tar xfv ./rtkmods.tar
+    rm -f ./rtkmods.tar
+else
+    echo "===> No need to restore rtk switch object files"
+fi
+
+# Remove symbolic links to driver directories.
+echo "Remove bcmdriver symlinks..."
+cd $dr_base_dir
+find bcmdrivers -lname "*" -print -exec rm -f "{}" ";"
+
+
+
+##
+## Archive source and object files.
+## The tar operation will show us all the files that are given to the consumer
+##
+echo "7----->delete userspace & xChange & targets"
+rm -rf $dr_base_dir/xChange $dr_base_dir/userspace $dr_base_dir/targets
+
+echo "8----->Broadcom request to remove /docs and not to use header files in shared/broadcom/include at CSP#CS3593408."
+rm -rf $dr_base_dir/docs $dr_base_dir/shared/broadcom/include
+
+if [[ $chip_ver == 63268 ]]; then
+  echo "Broadcom request to remove when release 63268 at CSP#CS1977104."
+  rm -rf $dr_base_dir/shared/broadcom/rdp
+fi
+if [[ $chip_ver == 63381 ]]; then
+  echo "Broadcom request to remove when release 63381 at CSP#CS1977104."
+  rm -rf $dr_base_dir/shared/broadcom/rdp
+fi
+
+cd $dr_base_dir
+dr_src="Makefile make.common make.modsw make.deprules \
+        version.make \
+        make.voice \
+        $dr_bcmdrivers_subdir $dr_kernel_subdir/* \
+        data-model \
+        shared/opensource/* "
+
+#adding 6838 NP firmware to consumer tarbal
+if [[ $chip_ver == *6838* ]]; then
+  dr_src="$dr_src shared/broadcom/rdp/impl1/firmware_oren/*"
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl2
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl1/firmware_oren_G9991
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl1/rdd
+fi
+
+#adding 6848 NP firmware to consumer tarbal
+if [[ $chip_ver == *6848* ]]; then
+  dr_src="$dr_src shared/broadcom/rdp/impl1/firmware_oren/*"
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl2
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl1/firmware_oren_G9991
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl1/rdd
+fi
+
+if [[ $chip_ver == *63138* ]]; then
+  dr_src="$dr_src shared/broadcom/rdp/impl2/firmware_dsl/*"
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl1
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl2/firmware_dsl_63138
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl2/firmware_dsl_63148
+  rm -rf $dr_base_dir/shared/broadcom/rdp/impl2/rdd
+fi
+
+if [ "$dr_user" = "root" ] ; then
+  chown -R root:root .
+fi
+chmod -R a+w  .
+
+cd ${dr_base_dir}/../
+cp -a ${dr_kernel_subdir}/ ${dr_kernel_subdir}_ori/
+cd -
+
+echo "8----->update Licenses $dr_src"
+if perl ${3}/update_licenses.pl --stage=2 --checkonly $dr_src
+then
+echo "create tarball ${dr_rel_ver}.tar.bz2"
+cd ${dr_base_dir}/../
+
+rm -rf `find ${kernel_linux_version}*/ -name ".*.cmd"`
+rm -rf `find ${kernel_linux_version}*/ -name ".pc"`
+rm -rf ${kernel_linux_version}*/patches/
+rm -rf ${kernel_linux_version}*/.config*
+rm -rf ${kernel_linux_version}*/vmlinux*
+diff -ur ${kernel_linux_version}_ori/ ${kernel_linux_version}/  > ${dr_output_dir}/999-Broadcom_bcm963xx_sdk_do_license.patch
+rm -rf ${kernel_linux_version}_ori/
+
+#tar cvfz $dr_output_dir/bcm963xx_${dr_rel_ver}_consumer.tar.gz --owner=root --group=root $dr_src --exclude=.svn
+tar -jcv -f ${dr_output_dir}/${dr_rel_ver}.tar.bz2 ${tarball_dr_name} --owner=root --group=root --exclude=.svn
+
+echo ""
+echo "The BCM963xx consumer tar release archive has been created."
+echo ""
+else
+  echo "License Leak .. please fix"
+  exit 1
+fi
+
+chmod a+rw $dr_output_dir/${dr_rel_ver}.tar.bz2
+
+echo ""
+echo "The release is complete."
+ls -l $dr_output_dir/${dr_rel_ver}.tar.bz2
+ls -l $dr_output_dir/999-Broadcom_bcm963xx_sdk_do_license.patch
+echo ""
+

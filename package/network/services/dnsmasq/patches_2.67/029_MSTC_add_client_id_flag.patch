@@ -1,0 +1,70 @@
+diff -urN dnsmasq-2.67.orig/src/rfc2131.c dnsmasq-2.67/src/rfc2131.c
+--- dnsmasq-2.67.orig/src/rfc2131.c	2021-11-19 07:37:38.636794297 +0800
++++ dnsmasq-2.67/src/rfc2131.c	2021-11-19 07:51:34.025513300 +0800
+@@ -152,7 +152,9 @@
+   char *vendor_class_ptr = NULL;
+   struct dhcp_ifname *ifname;
+ #endif
+-int jjjjj;//Jessie
++#ifdef ADD_CLIENT_ID_ON_THE_SAME_MAC
++  int iiiiii;
++#endif
+   subnet_addr.s_addr = override.s_addr = 0;
+ 
+   /* set tag with name == interface */
+@@ -288,31 +290,30 @@
+ 	{
+ 	  clid_len = option_len(opt);
+ 	  clid = option_ptr(opt, 0);
+-	  int iiiiii;
+-	  for(iiiiii=0;iiiiii<6;iiiiii++){
+-		  if(mess->chaddr[iiiiii]==clid[iiiiii+1]){
+-			  //skip
+-		  } else {
+-			  break;
+-		  }
+-	  }
+-	  if(6==iiiiii){
+-		clid_len = 7;
+-		for(iiiiii=1; iiiiii< 7; iiiiii++)
+-			clid[iiiiii] = int_index;
+-		my_syslog(MS_DHCP | LOG_DEBUG, "%s client id==MAC address", __func__);
+-	  } else {
+-		 my_syslog(MS_DHCP | LOG_DEBUG, "%s client id!=MAC address", __func__);
+-	  }
+-	}
+-	else {
+-		my_syslog(MS_DHCP | LOG_DEBUG, "%s NO client id,int_index=%d", __func__, int_index);
+-		memset(tmpClid, 0, sizeof(tmpClid));
+-		clid_len = 7;
+-		clid = tmpClid;
+-		clid[0] = 1;
+-		for(jjjjj=1; jjjjj< 7; jjjjj++)
+-			clid[jjjjj] = int_index;
++#ifdef ADD_CLIENT_ID_ON_THE_SAME_MAC
++		my_syslog(MS_DHCP | LOG_DEBUG, "%s clid_len=%d", __func__, clid_len);
++		if(clid_len > 6 && clid != NULL){
++			for(iiiiii=0;iiiiii<6;iiiiii++){
++				/* clid[0]
++				0x01: hardware address
++				0xff: IAID
++				0x0002: DUID
++				*/
++				if(mess->chaddr[iiiiii]==clid[iiiiii+1]){
++					//skip
++				} else {
++					break;
++				}
++			}
++			if(6==iiiiii){
++				clid[1] = int_index;
++				my_syslog(MS_DHCP | LOG_DEBUG, "%s client id==MAC address", __func__);
++			} else {
++				my_syslog(MS_DHCP | LOG_DEBUG, "%s client id!=MAC address", __func__);
++			}
++			my_syslog(MS_DHCP | LOG_DEBUG, "%s client id,clid=%x", __func__, clid[0], clid[1], clid[2], clid[3], clid[4], clid[5], clid[6]);
++		}
++#endif
+ 	}
+ 
+       /* do we have a lease in store? */

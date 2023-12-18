@@ -1,0 +1,11 @@
+Index: linux-3.10.14/drivers/mtd/nand/nand_device_list.h
+===================================================================
+--- linux-3.10.14.orig/drivers/mtd/nand/nand_device_list.h
++++ linux-3.10.14/drivers/mtd/nand/nand_device_list.h
+@@ -10,4 +10,5 @@
+ 	{0xECD3, 0x519558, 5, 8, 1024, 128, 2048, 64, 0x44333, "K9K8G8000", 0},
+-    {0xC2F1, 0x801DC2, 4, 8, 128, 128, 2048, 64, 0x30C77fff, "MX30LF1G08AA", 0},
++	{0xC2F1, 0x801DC2, 4, 8, 128, 128, 2048, 64, 0x30C77fff, "MX30LF1G08AA", 0},
++	{0xC2F1, 0x809502, 4, 8, 128, 128, 2048, 64, 0x30C77fff, "MX30LF1G18AC", 0},		//LTE7240 NAND Flash.
+ 	{0xC2DA, 0x909506, 5, 8, 256, 128, 2048, 64, 0x30C77fff, "MX30LF2G18AC", 0},
+ 	{0xC2DC, 0x909556, 5, 8, 512, 128, 2048, 64, 0x30C77fff, "MX30LF4G18AC", 0},

@@ -1,0 +1,21 @@
+Index: linux-3.10.14/drivers/net/raeth/raether.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/raether.c	2018-12-20 16:14:37.566424050 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2018-12-20 16:19:44.682386649 +0800
+@@ -5872,11 +5872,16 @@
+ 	regValue |= (1<<13); //Port 5 as GMAC, no Internal PHY
+ 
+ #if defined (CONFIG_RAETH_GMAC2)
++
++#ifdef CONFIG_GPIO_LTE7240
++	printk("INFO: SKIP setting RMGII2 as Normal mode! \n"); //LTE7240 WIFI LED on GMII2 , so skip the RGMII2 Nomral Setting
++#else
+ 	/*RGMII2=Normal mode*/
+ 	*(volatile u_long *)(RALINK_SYSCTL_BASE + 0x60) &= ~(0x1 << 15);
+ 
+ 	/*GMAC2= RGMII mode*/
+ 	*(volatile u_long *)(SYSCFG1) &= ~(0x3 << 14);
++#endif
+ 	mii_mgr_write(31, 0x3500, 0x5e33b); //MT7530 P5 Force 1000, we can ignore this setting??????
+ 	sysRegWrite(RALINK_ETH_SW_BASE+0x200, 0x2105e33b);//(GE2, Force 1000)
+ 

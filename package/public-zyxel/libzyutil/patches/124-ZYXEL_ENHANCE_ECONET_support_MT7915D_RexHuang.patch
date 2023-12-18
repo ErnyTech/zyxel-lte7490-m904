@@ -1,0 +1,14 @@
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2020-04-08 16:02:14.733832000 +0800
++++ libzyutil-1.0/Makefile	2020-04-08 16:05:08.979411471 +0800
+@@ -59,6 +59,9 @@
+ ifneq ($(strip $(TCSUPPORT_WLAN_MT7615D)),)
+ ZCFLAGS+=-DMT7615D -DMT7615_11N -DMT7615E -DTCSUPPORT_DUAL_WLAN -DTCSUPPORT_WLAN_AC
+ endif
++ifneq ($(strip $(TCSUPPORT_WLAN_MT7915D)),)
++ZCFLAGS+=-DMT7915D -DMT7915N -DMT7915E -DTCSUPPORT_DUAL_WLAN -DTCSUPPORT_WLAN_AC -DTCSUPPORT_WLAN_AX -DTCSUPPORT_WLAN_WPA3
++endif
+ ifneq ($(strip $(TCSUPPORT_DUAL_WLAN_MT7570)),)
+ ZCFLAGS+=-DTCSUPPORT_MT7570
+ endif

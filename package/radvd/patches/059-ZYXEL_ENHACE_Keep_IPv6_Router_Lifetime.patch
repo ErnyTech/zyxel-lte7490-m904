@@ -1,0 +1,36 @@
+Index: radvd-1.8/send.c
+===================================================================
+--- radvd-1.8.orig/send.c	2020-07-24 20:53:22.336991957 +0800
++++ radvd-1.8/send.c	2020-07-24 20:55:52.272437822 +0800
+@@ -497,12 +497,16 @@
+ 	radvert->nd_ra_flags_reserved   |=
+ 		(iface->AdvHomeAgentFlag)?ND_RA_FLAG_HOME_AGENT:0;
+ 
++#if 0 // Jessie Lu@2020.07.24: 0->1, Keep the router life time for IPv6 Client.
++	radvert->nd_ra_router_lifetime	 =  !check_ip6_forwarding() ? htons(iface->AdvDefaultLifetime) : 0;
++#else
+ 	if (iface->cease_adv) {
+ 		radvert->nd_ra_router_lifetime = 0;
+ 	} else {
+ 		/* if forwarding is disabled, send zero router lifetime */
+ 		radvert->nd_ra_router_lifetime	 =  !check_ip6_forwarding() ? htons(iface->AdvDefaultLifetime) : 0;
+ 	}
++#endif
+ 	radvert->nd_ra_flags_reserved   |=
+ 		(iface->AdvDefaultPreference << ND_OPT_RI_PRF_SHIFT) & ND_OPT_RI_PRF_MASK;
+ 
+@@ -577,12 +581,14 @@
+ 		prefix = prefix->next;
+ 		}
+ 
++#if 1 // Jessie Lu@2020.07.24: 1->0, Keep the router life time for IPv6 Client.
+ 	if (0 == IsAnyPrefixEnable) {
+ 		// RFC7084: L-4: An IPv6 CE router MUST NOT advertise itself as a default
+ 		//               router with a Router Lifetime [RFC4861] greater than zero if
+ 		//               it has no prefixes configured or delegated to it.
+ 		radvert->nd_ra_router_lifetime = 0;
+ 	}
++#endif
+ 
+ 	route = iface->AdvRouteList;
+ 

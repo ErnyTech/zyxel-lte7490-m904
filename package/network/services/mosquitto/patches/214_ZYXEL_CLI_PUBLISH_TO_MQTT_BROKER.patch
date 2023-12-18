@@ -1,0 +1,575 @@
+Index: mosquitto-1.6.7/client/client_shared.c
+===================================================================
+--- mosquitto-1.6.7.orig/client/client_shared.c	2022-08-08 14:40:01.550331001 +0800
++++ mosquitto-1.6.7/client/client_shared.c	2022-08-08 14:42:09.483726975 +0800
+@@ -946,6 +946,12 @@
+ 			cfg->parentIndex = atoi(argv[i+1]);
+ 			i++;
+ #endif
++#if 1 //#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++		}else if(!strcmp(argv[i], "-x")){
++			cfg->processIdx = atoi(argv[i+1]);
++			//printf("%s() cfg->processIdx %d\n", __FUNCTION__, cfg->processIdx);
++			i++;
++#endif
+ 		}else if(!strcmp(argv[i], "-M")){
+ 			if(i==argc-1){
+ 				fprintf(stderr, "Error: -M argument given but max_inflight not specified.\n\n");
+Index: mosquitto-1.6.7/client/client_shared.h
+===================================================================
+--- mosquitto-1.6.7.orig/client/client_shared.h	2022-08-08 14:40:01.550331001 +0800
++++ mosquitto-1.6.7/client/client_shared.h	2022-08-08 14:42:06.070396766 +0800
+@@ -187,6 +187,9 @@
+ 	int file_count; /* pub */
+ 	int parentIndex;
+ #endif
++#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++	int processIdx;
++#endif
+ 	mos_mqtt_conn_params_t mqtt_conn;
+ };
+ 
+Index: mosquitto-1.6.7/client/pub_client.c
+===================================================================
+--- mosquitto-1.6.7.orig/client/pub_client.c   2022-08-08 14:40:01.550331001 +0800
++++ mosquitto-1.6.7/client/pub_client.c        2022-08-08 14:42:02.875539092 +0800
+@@ -36,7 +36,237 @@
+ #include "pub_shared.h"
+ #include<unistd.h>//Jessie
+ #include<signal.h>//Jessie
++#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++#include <pthread.h>
++#include <sys/types.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <json/json.h>
++/* Define Process Socket Receive Data Job Funtion Pointer */
++typedef int (*SOCKJOB)(void*);
++struct mosquitto *mosq = NULL;//Jessie move from main() to global
++int filesock_checkservice(char *connectPath);
++int filesock_connect(char *connectPath, int *sockFd);
++int filesock_open (char *recvPath, int *sockFd);
++void filesock_close(int *sockFd);
++void filesock_listen(char *recvPath, int sockFd, int blockTimeSec, int blockTimeUsec, int recvBufSize, SOCKJOB funcPtr);
++void filesock_send(char *sendPath, int sockFd, void *sendBuf, int sendBufSize);
++int pIndex;
++/*************************
++* Function 	: filesock_checkservice()
++* Description	: Check Socket Service On or Not
++* Output 		: 0 : Service On
++*           		: -1 : Service Off
++*************************/
++int filesock_checkservice(
++	char *connectPath	/* Connect Socket Path */
++){
++	int ret = 0;
++	int sockFd = -1;
++	struct sockaddr_un sockAddr;
++
++	/* Open File Socket , if error occured , return -1 */
++	sockFd = socket(AF_UNIX, SOCK_DGRAM, 0);
++	if (-1 == sockFd) {
++		//perror("socket() failed");
++		ret = -1;
++	}
++
++	/* Check Socket Service On or Not */
++	if (0 == ret) {
++		/* Set Sock Address */
++		memset(&sockAddr, 0, sizeof(sockAddr));
++		sockAddr.sun_family = AF_UNIX;
++		strncpy(sockAddr.sun_path, connectPath, sizeof(sockAddr.sun_path)-1);
++
++		if (-1 == connect(sockFd, (struct sockaddr*)&sockAddr, sizeof(sockAddr))) {
++			//perror("connect() failed");
++			ret = -1;
++		}
++	}
++
++	/* Close Socket */
++	if (-1 != sockFd) {
++		close(sockFd);
++	}
++
++	return ret;
++}
++
++
++/*************************
++* Function 	: filesock_connect()
++* Description	: Connect to socket listen buffer
++* Output 		: 0 : create success
++*			: -1 : create fail
++*************************/
++int filesock_connect(
++	char *connectPath,	/* Connect Socket Path */
++	int *sockFd			/* Socket Fd */
++){
++	struct sockaddr_un sockAddr;
++
++	/* Open File Socket , if error occured , return -1 */
++	*sockFd = socket(AF_UNIX, SOCK_DGRAM, 0);
++	if (-1 == *sockFd) {
++		perror("socket() failed");
++		return -1;
++	}
++
++	/* Set Sock Address */
++	memset(&sockAddr, 0, sizeof(sockAddr));
++	sockAddr.sun_family = AF_UNIX;
++	strncpy(sockAddr.sun_path, connectPath, sizeof(sockAddr.sun_path)-1);
++
++	if (-1 == connect(*sockFd, (struct sockaddr*)&sockAddr, sizeof(sockAddr))) {
++		perror("connect() failed");
++		return -1;
++	}
++
++	return 0;
++}
++
++
++/********************************
++*
++* Function	: filesock_open()
++* Description	: Open a socket listen buffer
++* Output		: 0 : create success
++*			: -1 : create fail
++********************************/
++int filesock_open(
++	char *recvPath,	/* Listened Socket Path */
++	int *sockFd		/* Socket Fd */
++){
++	struct sockaddr_un sockAddr;
++
++	/* Remove Socket FilePath */
++	unlink(recvPath);
++
++	/* Open File Socket , if error occured , return -1 */
++	*sockFd = socket(AF_UNIX, SOCK_DGRAM, 0);
++	if (-1 == *sockFd) {
++		perror("socket() failed");
++		return -1;
++	}
++
++	/* Set Sock Address */
++	memset(&sockAddr, 0, sizeof(sockAddr));
++	sockAddr.sun_family = AF_UNIX;
++	strncpy(sockAddr.sun_path, recvPath, sizeof(sockAddr.sun_path)-1);
++
++	/* bind file socket id with server address , if error occured , return -1 */
++	if (-1 == bind(*sockFd, (struct sockaddr *)&sockAddr, sizeof(sockAddr))) {
++		perror("bind() failed");
++		return -1;
++	}
++
++	return 0;
++}
++
++
++/********************************
++* Function	: filesock_close()
++* Description	: Close a socket 
++* Output		: 
++********************************/
++void filesock_close(
++	int *sockFd	/* Socket Fd */
++){
++	if (-1 != *sockFd) {
++		close(*sockFd);
++		*sockFd=-1;
++ 	}
++}
++
++
++/********************************
++* Function	: filesock_listen()
++* Description	: Listened a socket connection 
++* Output		: 
++********************************/
++void filesock_listen(
++	char *recvPath,		/* Listened Socket Path */
++	int sockFd,			/* Socket Fd */
++	int blockTimeSec,	/* Block Time : Second */
++	int blockTimeUsec,	/* Block Time : Milli-Second */
++	int recvBufSize,	/* Receive Buf Size */
++	SOCKJOB funcPtr
++){
++	// Receive Data
++	char recvBuf[recvBufSize];
++	// Declare socket length
++	socklen_t sockLen = 0;
++	// Delcare socket date byte array
++	fd_set fdData;
++	// Declare interval of time-out
++	struct timeval time_int;
++	// Receiv Socket Buf Path
++	struct sockaddr_un sockAddr;
++
++	/* Set Sock Address */
++	memset(&sockAddr, 0, sizeof(sockAddr));
++	sockAddr.sun_family = AF_UNIX;
++	strncpy(sockAddr.sun_path, recvPath, sizeof(sockAddr.sun_path)-1);
++
++	while (1) {
++		// Set SockAddr Length
++		sockLen = sizeof(sockAddr);
++
++		// Set Interval Of Timeout
++		time_int.tv_sec = blockTimeSec;
++		time_int.tv_usec = blockTimeUsec * 1000;
++
++		// Clear fdData
++		FD_ZERO(&fdData);
++		// Join sockFd into fdData
++		FD_SET(sockFd, &fdData);
++
++		// Check sockFd exist in maxFd or not , until timeout
++		// Return Value = -1 : error
++		// Return Value = 0  : timeout
++		if (0 < select((sockFd + 1) , &fdData , (fd_set*)NULL, (fd_set*)NULL, &time_int)) {
++			// Check sockFd exist in fdData or not
++			if (0 < FD_ISSET(sockFd, &fdData)) {
++				memset(recvBuf, 0, recvBufSize);
++				// Receive sockFd data
++				if (0 < recvfrom(sockFd, &recvBuf, recvBufSize, 0, (struct sockaddr *)&sockAddr,  &sockLen)) {
++					// Process Cmd Job
++					if( funcPtr(recvBuf) == -1){ /*break from while loop*/
++						break;
++					}
++				}
++			}
++		}
++
++	}
++
++}
++
++
++/********************************
++* Function	: filesock_send()
++* Description	: Send message to a socket file path
++* Output		:
++********************************/
++void filesock_send(
++	char *sendPath,	/* Socket Sendto File Path*/
++	int sockFd,		/* Socket Fd */
++	void *sendBuf,	/* Send Buf Data */
++	int sendBufSize	/* Send Buf Data Size */
++){
++	struct sockaddr_un sockAddr;
++
++	/* Set Sock Address */
++	memset(&sockAddr, 0, sizeof(sockAddr));
++	sockAddr.sun_family = AF_UNIX;
++	strncpy(sockAddr.sun_path, sendPath, sizeof(sockAddr.sun_path)-1);
++
++	/* Send Msg To SendTo Socket Path */
++	sendto(sockFd, sendBuf, sendBufSize, 0,  (struct sockaddr *)&sockAddr, sizeof(sockAddr));
++}
+ 
++#endif//ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
+ /* Global variables for use in callbacks. See sub_client.c for an example of
+  * using a struct to hold variables for use in callbacks. */
+ static bool first_publish = true;
+@@ -141,6 +371,9 @@
+ 				//printf("%s() cfg.topic_count=%d\n", __FUNCTION__, cfg.topic_count);
+ 				for(i=0;i<cfg.topic_count;i++){
+ 					//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
++					#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++					//printf("%s() call my_publish __1\n", __FUNCTION__);
++					#endif
+ 					rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
+ 				}
+ 				#else
+@@ -200,6 +433,7 @@
+ 	UNUSED(properties);
+ 
+ 	last_mid_sent = mid;
++	zcfgLogPrefix(ZCFG_LOG_INFO, ZCFG_LOGPRE_MQTT, "[INFO] Last MID Sent %d\n", last_mid_sent);
+ 	if(reason_code > 127){
+ 		err_printf(&cfg, "Warning: Publish %d failed: %s.\n", mid, mosquitto_reason_string(reason_code));
+ 		zcfgLogPrefix(ZCFG_LOG_WARNING, ZCFG_LOGPRE_MQTT, "[Warning] Publish %d failed: %s.\n", mid, mosquitto_reason_string(reason_code));
+@@ -251,14 +485,14 @@
+ 	if(cfg.repeat_count > 1 && (cfg.repeat_delay.tv_sec == 0 || cfg.repeat_delay.tv_usec != 0)){
+ 		loop_delay = cfg.repeat_delay.tv_usec / 2000;
+ 	}
+-	
++
+ 	mode = cfg.pub_mode;
+ 
+ 	if(mode == MSGMODE_STDIN_LINE){
+ 		mosquitto_loop_start(mosq);
+ 		stdin_finished = false;
+ 	}
+-	
++
+ 	do{
+ 		if(mode == MSGMODE_STDIN_LINE){
+ 			if(status == STATUS_CONNACK_RECVD){
+@@ -390,6 +624,11 @@
+ 			rc = MOSQ_ERR_SUCCESS;
+ 		}else{
+ 			rc = mosquitto_loop(mosq, loop_delay, 1);
++			#if 0//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++			printf("%s() call my_publish() to test\n", __FUNCTION__);
++			rc = my_publish(mosq, &mid_sent, "topicAgainAgain", strlen("againAgain"), "againAgain", 0, 0);
++			#endif
++
+ 			if(ready_for_repeat && check_repeat_time()){
+ 				rc = 0;
+ 				switch(cfg.pub_mode){
+@@ -433,7 +672,7 @@
+ 								}
+ 							}
+ 							rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
+-							//printf ("%s() Jessie 333333333, rc=%d\n", __FUNCTION__, rc);
++
+ 							for(i=0;i<cfg.topic_count;i++){
+ 								//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
+ 								rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
+@@ -583,10 +822,186 @@
+ 	printf("\nSee https://mosquitto.org/ for more information.\n\n");
+ }
+ 
++#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++#define PUBLISH_CMD_PATH "/tmp/publish_cmd"
++pthread_t publish_cmd_thread;
++pthread_mutex_t publishCmdMutexLock;
++int gPublishCmdSockFd = -1;
++
++typedef enum IpcCmd_s{
++        ePublishCmd
++}IpcCmd_t;
++
++typedef struct publishCmdData_s{
++        IpcCmd_t ipcCmd;
++        char data[2048+1];//hard code test only
++}publishCmdData_t;
++
++int usp_set_srv(publishCmdData_t * msgData);
++#define publish_cmd usp_set_srv
++
++
++typedef struct publishCmdHandler_s{
++        IpcCmd_t ipcCmd;
++        int (*cmdFunc)(publishCmdData_t *msgData);
++}publishCmdHandler_t;
++
++const publishCmdHandler_t publishCmdHandler[] = {
++        {ePublishCmd,      publish_cmd},
++        { -1, NULL}
++};
++
++int usp_set_srv( publishCmdData_t *msgData ){
++        struct json_object *mgmtData;
++		char *topic = NULL;
++		char *pbuf = NULL;
++		int pbuf_len = 0;
++		int rc = -1;
++
++        if(!msgData)
++                return -1;
++
++        mgmtData = json_tokener_parse((const char *)msgData->data);
++
++        switch(msgData->ipcCmd) {
++        case ePublishCmd:
++                {
++					#if 1
++						if(mgmtData){
++							char *topicStr = NULL;
++							char *msgStr = NULL;
++							topicStr = json_object_get_string(json_object_object_get(mgmtData, "Topic"));
++							msgStr = json_object_get_string(json_object_object_get(mgmtData, "Message"));
++							if(topicStr){
++								topic = malloc(strlen(topicStr)+1);
++								if(topic){
++									memset(topic, 0, strlen(topicStr)+1);
++									snprintf(topic, strlen(topicStr)+1, "%s", topicStr);
++								}
++							}
++							if(msgStr){
++								pbuf = malloc(strlen(msgStr)+1);
++								if(pbuf){
++									memset(pbuf, 0, strlen(msgStr)+1);
++									snprintf(pbuf, strlen(msgStr)+1, "%s", msgStr);
++								}
++								pbuf_len = strlen(pbuf);
++							}
++
++							rc = my_publish(mosq, &mid_sent, topic, pbuf_len, pbuf, 0, 0);//0 and 0 hard code test
++
++							if(topic){
++								free(topic);
++								topic = NULL;
++							}
++							if(pbuf){
++								free(pbuf);
++								pbuf = NULL;
++							}
++
++						}
++					#endif
++                }
++                break;
++
++        default: break;
++        }
++
++        json_object_put(mgmtData);
++		return 0;
++}
++
++void OS_UTILS_SetPublishCmdThread(void)
++{
++    publish_cmd_thread = pthread_self();
++}
++
++int publish_cmd_proc(
++        void  *recvBuf
++){
++        publishCmdData_t *msgData = (publishCmdData_t *)recvBuf;
++        publishCmdHandler_t *cmdhandlPtr = NULL;
++        int ret = 0;
++
++        cmdhandlPtr = (publishCmdHandler_t*)publishCmdHandler;
++        while( cmdhandlPtr->ipcCmd != -1) {
++                if ( msgData->ipcCmd == cmdhandlPtr->ipcCmd ) {
++                        pthread_mutex_lock(&publishCmdMutexLock);
++                        if( cmdhandlPtr->cmdFunc(msgData) == -1 ){
++							printf("%s() ret = -1\n", __FUNCTION__);
++							ret = -1;
++                        }
++                        pthread_mutex_unlock(&publishCmdMutexLock);
++                        break;
++                }
++                cmdhandlPtr++;
++        }
++
++        return ret;
++}
++
++void publish_cmd_task(void *param){
++		char path[128];
++		int index;
++
++		index = *(int *)param;
++        OS_UTILS_SetPublishCmdThread();
++		snprintf(path, sizeof(path), "%s%d", PUBLISH_CMD_PATH, index);
++
++		if (0 == filesock_open(path, &gPublishCmdSockFd)) {
++                filesock_listen(path, gPublishCmdSockFd, 1, 0, sizeof(publishCmdData_t), publish_cmd_proc);
++        }	
++
++        filesock_close( &gPublishCmdSockFd );
++        gPublishCmdSockFd = -1;
++}
++
++
++int OS_UTILS_CreateThread(void *(* start_routine)(void *), void *args)
++{
++    int err;
++    pthread_t thread;
++    pthread_attr_t attr;
++
++    err = pthread_attr_init(&attr);
++    if (err != 0)
++    {
++        printf("pthread_attr_init fail.\n");
++        return -1;
++    }
++
++    err = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
++    if (err != 0)
++    {
++        printf("pthread_attr_setdetachstate fail.\n");
++        err = -1;
++        goto exit;
++    }
++
++    err = pthread_create(&thread, &attr, start_routine, args);
++    if (err != 0)
++    {
++        printf("pthread_create fail.\n");
++        err = -1;
++        goto exit;
++    }
++
++    err = 0;
++
++exit:
++    pthread_attr_destroy(&attr);
++    return err;
++}
++#endif//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
+ 
+ int main(int argc, char *argv[])
+ {
+-	struct mosquitto *mosq = NULL;
++	#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++	int err = -1;
++	#else
++	struct mosquitto *mosq = NULL;//Jessie move to global	
++	#endif
++
+ 	int rc;
+ 	#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	pid_t pid = -1;
+@@ -613,13 +1028,12 @@
+ 	//unlink(pid_file);
+ 
+ 	pid = getpid();
+-	printf("%s() pid=%d\n", __FUNCTION__, pid);
+ 	//snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);
+ 	fp = fopen(pid_file, "w+");
+ 	if(fp == NULL){
+ 		goto cleanup;
+ 	}
+-	printf("%s() after write pid to /tmp/mosquitto_pub_x.pid\n", __FUNCTION__);
++	//printf("%s() after write pid to /tmp/mosquitto_pub_x.pid\n", __FUNCTION__);
+ 	fprintf(fp, "%d", pid);
+ 	fclose(fp);
+ 	fp = NULL;
+@@ -705,7 +1119,16 @@
+ 	if(rc){
+ 		goto cleanup;
+ 	}
++#if 1//#ifdef ZYXEL_CLI_PUBLISH_TO_MQTT_BROKER
++	pIndex = cfg.processIdx;
+ 
++	err = OS_UTILS_CreateThread(publish_cmd_task, &pIndex);
++    if (err != 0)
++    {
++		printf("%s() OS_UTILS_CreateThread fail.\n", __FUNCTION__);
++        return;
++    }
++#endif
+ 	rc = pub_shared_loop(mosq);
+ 
+ #if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+
+Index: mosquitto-1.6.7/config.mk
+===================================================================
+--- mosquitto-1.6.7.orig/config.mk	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7/config.mk	2022-08-08 14:29:02.316601400 +0800
+@@ -143,9 +143,9 @@
+ 
+ CLIENT_CPPFLAGS:=$(CPPFLAGS) -I.. -I../lib
+ CLIENT_CFLAGS:=${CFLAGS} -DVERSION="\"${VERSION}\""
+-CLIENT_LDFLAGS:=$(LDFLAGS) -L../lib
+-CLIENT_LDADD:=
++CLIENT_LDFLAGS:=$(LDFLAGS) -L../lib -L../../../toolchain/ipkg-ramips_24kec/libpthread/lib/ -lpthread -ljson
+ 
++CLIENT_LDADD:=
+ PASSWD_LDADD:=
+ 
+ ifneq ($(or $(findstring $(UNAME),FreeBSD), $(findstring $(UNAME),OpenBSD), $(findstring $(UNAME),NetBSD)),)
+@@ -157,7 +157,7 @@
+ ifeq ($(UNAME),Linux)
+ 	BROKER_LDADD:=$(BROKER_LDADD) -lrt
+ 	BROKER_LDFLAGS:=$(BROKER_LDFLAGS) -Wl,--dynamic-list=linker.syms
+-	LIB_LIBADD:=$(LIB_LIBADD) -lrt
++	LIB_LIBADD:=$(LIB_LIBADD) -lrt -lpthread
+ endif
+ 
+ ifeq ($(WITH_SHARED_LIBRARIES),yes)

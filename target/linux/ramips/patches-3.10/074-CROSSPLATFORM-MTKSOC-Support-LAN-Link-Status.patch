@@ -1,0 +1,316 @@
+Index: linux-3.10.14/drivers/net/raeth/raether.c
+===================================================================
+--- linux-3.10.14.orig/drivers/net/raeth/raether.c	2017-11-15 13:56:52.990301179 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2017-11-15 13:58:31.350300333 +0800
+@@ -55,6 +55,46 @@
+ #if defined (CONFIG_ARCH_MT7623) 
+ #include <mach/eint.h>
+ #endif
++//#define CONFIG_ZYXEL 1 //for ZYXEL option test
++#ifdef CONFIG_ZYXEL
++//#include "drv_netlink.h"
++/*Define Netlink message */
++#define NETLINK_MONITOR 25 /*send events to userspace monitor task*/
++/* message types exchanged using NETLINK_BRCM_MONITOR */
++#define MSG_NETLINK_WAKEUP_MONITOR_TASK 0X1000
++#define MSG_NETLINK_LINK_STATUS_CHANGED 0X2000
++#define MSG_NETLINK_LINK_TRAFFIC_TYPE_MISMATCH 0X4000
++#define MSG_NETLINK_SAVE_DSL_CFG		0X8000
++#define MSG_NETLINK_CALLBACK_DSL_DRV	0X0100
++#include <net/sock.h>
++#include <linux/netlink.h>
++/************************************************************************
++*
++*            ZYXEL Kernel Monitor
++*
++**************************************************************************/
++#define MAX_PAYLOAD_LEN 64
++static struct sock *g_monitor_nl_sk;
++static int g_monitor_nl_pid = 0 ;
++static void kerSysInitMonitorSocket( void );
++static void kerSysCleanupMonitorSocket( void );
++static void kerSysSendtoMonitorTask(int msgType, char *msgData, int msgDataLen);
++struct proc_dir_entry *kmonitor_proc_dir=NULL, *kmonitor_proc_user_pid=NULL;
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(3,10,0)
++static ssize_t user_pid_write_proc(struct file *file, const char __user *buffer, size_t count, loff_t *pos);
++static const struct file_operations proc_fops=
++{
++ .read=NULL,
++ .write=user_pid_write_proc,
++ .owner=THIS_MODULE,
++ };
++#else
++static int user_pid_write_proc(struct file *file, const char *buffer,unsigned long count, void *data);
++#endif //Linux version
++
++#endif //ZYXEL
++
+ #if defined (TASKLET_WORKQUEUE_SW)
+ int init_schedule;
+ int working_schedule;
+@@ -1971,6 +2011,14 @@
+     struct net_device *dev = dev_raether;
+     END_DEVICE *ei_local = netdev_priv(dev);
+ 
++#ifdef CONFIG_ZYXEL  //ZYXEL
++	char temp[32] = "\0";
++	unsigned int tmp_speed;
++#endif
++#ifdef CONFIG_GPIO_LTE7240
++     u8 lan_gpio = 18;
++#endif
++
+ #if defined (CONFIG_RALINK_RT6855) || defined(CONFIG_RALINK_RT6855A) || \
+     defined (CONFIG_RALINK_MT7620)
+     reg_val = *((volatile u32 *)(RALINK_ETH_SW_BASE+ 0x3008 + (port_no*0x100)));
+@@ -1980,6 +2028,26 @@
+     if(reg_val & 0x1) {
+ 	printk("ESW: Link Status Changed - Port%d Link UP\n", port_no);
+ 
++#ifdef CONFIG_GPIO_LTE7240
++	*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1<<(lan_gpio); //LAN LINK LED ON
++	*(unsigned long *)(RALINK_PIO_BASE + 0x20) |= 1<<(lan_gpio);
++#endif	
++
++#ifdef CONFIG_ZYXEL //ZYXEL
++	/*LAN port2 to eth2  */
++	if ( ((reg_val >>2) & 0x0003)==2)
++		tmp_speed=1000;
++	else if ( ((reg_val >>2) & 0x0003)==1)
++		tmp_speed=100;
++	else if ( ((reg_val >>2) & 0x0003)==0)
++		tmp_speed=10;
++	else
++		tmp_speed=0;
++	sprintf(temp, "eth%d:up:%d:%s", port_no,tmp_speed,((reg_val >> 1 & 0x1) ? "F":"H"));
++	kerSysSendtoMonitorTask(MSG_NETLINK_LINK_STATUS_CHANGED,temp,sizeof(temp));
++
++#endif
++
+ #if defined (CONFIG_WAN_AT_P0)
+ 	if(port_no==0) {
+ 	    schedule_work(&ei_local->kill_sig_wq);
+@@ -1992,6 +2060,16 @@
+     } else {	    
+ 	printk("ESW: Link Status Changed - Port%d Link Down\n", port_no);
+ 
++#ifdef CONFIG_GPIO_LTE7240
++	*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1<<(lan_gpio); //LAN LINK LED OFF	
++	*(unsigned long *)(RALINK_PIO_BASE + 0x20) &= ~(1<<lan_gpio);
++#endif	
++
++#ifdef CONFIG_ZYXEL //ZYXEL
++	sprintf(temp, "eth%d:down", port_no);
++	kerSysSendtoMonitorTask(MSG_NETLINK_LINK_STATUS_CHANGED,temp,sizeof(temp));
++
++#endif
+     }
+ }
+ #endif
+@@ -5946,7 +6024,9 @@
+ {
+ 	int ret;
+ 	struct net_device *dev = alloc_etherdev(sizeof(END_DEVICE));
++#if !defined (CONFIG_MIPS)	//avoid compiler warning message
+ 	END_DEVICE*     ei_local = netdev_priv(dev);
++#endif
+ 
+ #ifdef CONFIG_RALINK_VISTA_BASIC
+ 	int sw_id=0;
+@@ -5998,6 +6078,33 @@
+ #ifdef CONFIG_RAETH_NETLINK
+ 	csr_netlink_init();
+ #endif
++
++#ifdef CONFIG_ZYXEL
++
++		
++		kmonitor_proc_dir = proc_mkdir("kmonitor", NULL);
++	
++		if(kmonitor_proc_dir)
++		{
++#if LINUX_VERSION_CODE > KERNEL_VERSION(3,10,0)
++			kmonitor_proc_user_pid = proc_create("user_pid", 0, kmonitor_proc_dir, &proc_fops);
++#else
++			kmonitor_proc_user_pid = create_proc_entry("user_pid", 0, kmonitor_proc_dir);
++			kmonitor_proc_user_pid->read_proc = NULL;
++			kmonitor_proc_user_pid->write_proc = user_pid_write_proc;
++#endif
++		}
++		
++		if(kmonitor_proc_user_pid)
++		printk("set proc_user_pid is ok \n");
++		else
++		//printk(KERN_ERR "Failed to set proc_user_pid %p \n", kmonitor_proc_user_pid); //do not need to print failure pointer.
++		printk(KERN_ERR "Failed to set proc_user_pid \n");
++
++		kerSysInitMonitorSocket();
++
++#endif
++
+ 	ret = debug_proc_init();
+ 
+ 	dev_raether = dev;
+@@ -6249,6 +6356,19 @@
+ #ifdef CONFIG_RAETH_NETLINK
+ 	csr_netlink_end();
+ #endif
++
++#ifdef CONFIG_ZYXEL
++
++    if(kmonitor_proc_user_pid){
++		remove_proc_entry("user_pid", kmonitor_proc_user_pid);
++	}
++	if(kmonitor_proc_dir){
++		remove_proc_entry("kmonitor", kmonitor_proc_dir);
++	}
++
++	kerSysCleanupMonitorSocket();
++#endif
++
+ }
+ 
+ __attribute__((optimize("O0"))) inline void sysRegWrite(unsigned int phys, unsigned int val)
+@@ -6294,6 +6414,141 @@
+ EXPORT_SYMBOL(raether_dump_pdma_info);
+ #endif	/* CONFIG_ETH_WIFI_OOM_DEBUG */
+ 
++#ifdef CONFIG_ZYXEL
++#if LINUX_VERSION_CODE > KERNEL_VERSION(3,10,0)
++static ssize_t user_pid_write_proc(struct file *file, const char *buffer,
++		size_t count, loff_t *pos){
++#else
++static int user_pid_write_proc(struct file *file, const char *buffer,
++	unsigned long count, void *data){
++#endif
++
++	char val_string[5];
++	uint user_pid;
++
++	if (count > sizeof(val_string) - 1)
++	{
++		return -EINVAL;
++	}
++
++	if (copy_from_user(val_string, buffer, count))
++	{
++		return -EFAULT;
++	}
++	val_string[count] = '\0';
++
++	sscanf(val_string, "%d", &user_pid) ;
++
++	g_monitor_nl_pid = user_pid;
++	printk(KERN_INFO "set user_pid flag to %d\n", g_monitor_nl_pid);
++
++
++	return count;
++}
++
++/*functionto receive message from usersapce
++ * Currently we dont expect any messages fromm userspace
++ */
++void kerSysRecvFrmMonitorTask(struct sk_buff *skb)
++{
++
++   /*process the message here*/
++   printk(KERN_WARNING "unexpected skb received at %s \n",__FUNCTION__);
++   kfree_skb(skb);
++   return;
++}
++
++void kerSysInitMonitorSocket( void )
++{
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(3,10,0)   	/*For New version 3.10 kernel netlink*/
++	static struct netlink_kernel_cfg nlcfg;
++	nlcfg.groups = 0;
++	nlcfg.flags = 0;
++	nlcfg.input = kerSysRecvFrmMonitorTask;
++	nlcfg.cb_mutex  = NULL;
++	nlcfg.bind = NULL;
++
++	g_monitor_nl_sk = netlink_kernel_create(&init_net, NETLINK_MONITOR, &nlcfg);	
++#else
++	g_monitor_nl_sk = netlink_kernel_create(&init_net, NETLINK_MONITOR, 0, kerSysRecvFrmMonitorTask, NULL, THIS_MODULE);
++#endif //LINUX_VERSION
++
++   if(!g_monitor_nl_sk)
++   {
++      printk(KERN_ERR "Failed to create a netlink socket for monitor\n");
++      return;
++   }
++
++}
++
++void kerSysSendtoMonitorTask(int msgType, char *msgData, int msgDataLen)
++{
++
++   struct sk_buff *skb =  NULL;
++   struct nlmsghdr *nl_msgHdr = NULL;
++   unsigned int nl_msgLen;
++
++
++   if(!g_monitor_nl_pid)
++   {
++      printk(KERN_INFO "message received before monitor task is initialized %s \n",__FUNCTION__);
++      return;
++   }
++
++   if(msgData && (msgDataLen > MAX_PAYLOAD_LEN))
++   {
++      printk(KERN_ERR "invalid message len in %s",__FUNCTION__);
++      return;
++   }
++
++   nl_msgLen = NLMSG_SPACE(msgDataLen);
++
++   /*Alloc skb ,this check helps to call the fucntion from interrupt context */
++
++   if(in_atomic())
++   {
++      skb = alloc_skb(nl_msgLen, GFP_ATOMIC);
++   }
++   else
++   {
++      skb = alloc_skb(nl_msgLen, GFP_KERNEL);
++   }
++
++   if(!skb)
++   {
++      printk(KERN_ERR "failed to alloc skb in %s",__FUNCTION__);
++      return;
++   }
++
++   nl_msgHdr = (struct nlmsghdr *)skb->data;
++   nl_msgHdr->nlmsg_type = msgType;
++   nl_msgHdr->nlmsg_pid=0;/*from kernel */
++   nl_msgHdr->nlmsg_len = nl_msgLen;
++   nl_msgHdr->nlmsg_flags =0;
++
++   if(msgData)
++   {
++      memcpy(NLMSG_DATA(nl_msgHdr),msgData,msgDataLen);
++   }
++
++   NETLINK_CB(skb).portid = 0; /*from kernel */
++
++   skb->len = nl_msgLen;
++
++   netlink_unicast(g_monitor_nl_sk, skb, g_monitor_nl_pid, MSG_DONTWAIT);
++
++   return;
++}
++
++void kerSysCleanupMonitorSocket(void)
++{
++   g_monitor_nl_pid = 0 ;
++   sock_release(g_monitor_nl_sk->sk_socket);
++}
++
++#endif //ZYXEL
++
+ EXPORT_SYMBOL(set_fe_dma_glo_cfg);
+ module_init(ra2882eth_init);
+ module_exit(ra2882eth_cleanup_module);

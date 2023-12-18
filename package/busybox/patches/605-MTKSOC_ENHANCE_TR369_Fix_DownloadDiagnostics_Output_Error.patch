@@ -1,0 +1,16 @@
+Index: busybox-1_20_1/networking/wget.c
+===================================================================
+--- busybox-1_20_1.orig/networking/wget.c   2021-08-11 15:19:48.613052000 +0800
++++ busybox-1_20_1/networking/wget.c        2021-08-11 15:20:12.609052000 +0800
+@@ -223,7 +223,11 @@
+ #endif
+ 
+ 	if(!strcmp(DiagnosticsState, "Requested")) {
++#ifdef ZCFG_SUPPORT_TR369
++		strcpy(DiagnosticsState, "Complete");
++#else
+ 		strcpy(DiagnosticsState, "Completed");
++#endif
+ 	}else if(strstr(DiagnosticsState, "None")) {
+ 		DiagnosticsState[strlen("None")] = '\0';
+ 	}

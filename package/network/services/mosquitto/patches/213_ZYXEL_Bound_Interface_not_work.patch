@@ -1,0 +1,38 @@
+diff -urN mosquitto-1.6.7.orig/lib/net_mosq.c mosquitto-1.6.7/lib/net_mosq.c
+--- mosquitto-1.6.7.orig/lib/net_mosq.c	2022-07-01 20:18:18.499830000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.c	2022-07-01 20:15:58.187830000 +0800
+@@ -461,9 +461,11 @@
+ 						*sock = INVALID_SOCKET;
+ 						continue;
+ 					}
++
++					printf("[Info] %s:%s(%d) Bind interface by address %s successfully\n", __FILE__, __func__, __LINE__, bind_address);
+ 				}
+ 				else{
+-					printf("[Error] %s:%s(%d) Can not find address(%s) interface. Bind failed.\n", __FILE__, __func__, __LINE__, bind_address);
++					printf("[Error] %s:%s(%d) Can not find bound interface by address %s.\n", __FILE__, __func__, __LINE__, bind_address);
+ 				}
+ 				if(ifaddr != NULL){
+ 					freeifaddrs(ifaddr);
+@@ -483,8 +485,10 @@
+ 				if(ret != 0){
+ 					printf("[Error] Set socket option(SO_BINDTODEVICE) failed (%d).\n", ret);
+ 				}
++				printf("[Info] %s:%s(%d) Bind interface by name %s successfully\n", __FILE__, __func__, __LINE__, ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName);
+ 			}
+ 			else{
++				printf("[Error] %s:%s(%d) Can not find bound interface by name %s.\n", __FILE__, __func__, __LINE__, ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName);
+ 				printf("[Error] %s:%d No bound interface found.\nReturn\n", __func__, __LINE__);
+ 				return MOSQ_ERR_EAI;
+ 			}
+diff -urN mosquitto-1.6.7.orig/lib/mosquitto_internal.h mosquitto-1.6.7/lib/mosquitto_internal.h
+--- mosquitto-1.6.7.orig/lib/mosquitto_internal.h	2022-07-01 20:12:13.351830000 +0800
++++ mosquitto-1.6.7/lib/mosquitto_internal.h	2022-07-01 20:08:59.139830000 +0800
+@@ -238,6 +238,7 @@
+ {
+     char* host;                   // Hostname of the broker
+     char* bind_address;           // Bind address
++	char* client_certificate;
+     char* bind_interfaceName;     // Bind address
+     unsigned int port;            // Port for broker
+     int keepalive;                // Keepalive setting for broker connection

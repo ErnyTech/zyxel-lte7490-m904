@@ -1,0 +1,52 @@
+--- a/Documentation/networking/ip-sysctl.txt
++++ b/Documentation/networking/ip-sysctl.txt
+@@ -1021,7 +1021,11 @@ disable_policy - BOOLEAN
+ disable_xfrm - BOOLEAN
+ 	Disable IPSEC encryption on this interface, whatever the policy
+ 
+-
++drop_gratuitous_arp - BOOLEAN
++    Drop all gratuitous ARP frames, for example if there's a known
++    good ARP proxy on the network and such frames need not be used
++    (or in the case of 802.11, must not be used to prevent attacks.)
++    Default: off (0)
+ 
+ tag - INTEGER
+ 	Allows you to write a number, which can be used as required.
+--- a/include/linux/inetdevice.h
++++ b/include/linux/inetdevice.h
+@@ -39,6 +39,7 @@ enum
+ 	IPV4_DEVCONF_SRC_VMARK,
+ 	IPV4_DEVCONF_PROXY_ARP_PVLAN,
+ 	IPV4_DEVCONF_ROUTE_LOCALNET,
++	IPV4_DEVCONF_DROP_GRATUITOUS_ARP,
+ 	__IPV4_DEVCONF_MAX
+ };
+ 
+--- a/net/ipv4/arp.c
++++ b/net/ipv4/arp.c
+@@ -807,6 +807,14 @@ static int arp_process(struct sk_buff *s
+ 		goto out;
+ 
+ /*
++ *    For some 802.11 wireless deployments (and possibly other networks),
++ *    there will be an ARP proxy and gratuitous ARP frames are attacks
++ *    and thus should not be accepted.
++ */
++    if (sip == tip && IN_DEV_ORCONF(in_dev, DROP_GRATUITOUS_ARP))
++        goto out;
++
++/*
+  *     Special case: We must set Frame Relay source Q.922 address
+  */
+ 	if (dev_type == ARPHRD_DLCI)
+--- a/net/ipv4/devinet.c
++++ b/net/ipv4/devinet.c
+@@ -2096,6 +2096,7 @@ static struct devinet_sysctl_table {
+ 		DEVINET_SYSCTL_RW_ENTRY(ARP_ACCEPT, "arp_accept"),
+ 		DEVINET_SYSCTL_RW_ENTRY(ARP_NOTIFY, "arp_notify"),
+ 		DEVINET_SYSCTL_RW_ENTRY(PROXY_ARP_PVLAN, "proxy_arp_pvlan"),
++        DEVINET_SYSCTL_RW_ENTRY(DROP_GRATUITOUS_ARP, "drop_gratuitous_arp"),
+ 
+ 		DEVINET_SYSCTL_FLUSHING_ENTRY(NOXFRM, "disable_xfrm"),
+ 		DEVINET_SYSCTL_FLUSHING_ENTRY(NOPOLICY, "disable_policy"),

@@ -1,0 +1,41 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-10-19 13:27:28.399950755 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-10-19 13:30:23.262304039 +0800
+@@ -397,8 +397,34 @@
+  */
+ zcfgRet_t zyUtilIGetNthMAC(char *mac, int nth)
+ {
+-	//TODO, fill here if you need.
+-	return ZCFG_INTERNAL_ERROR;
++	unsigned long macsequence = 0;
++	unsigned char pucaMacAddr[NVRAM_MAC_ADDRESS_LEN]={0};
++	NVRAM_DATA nvramData;
++
++	memset(&nvramData, 0, sizeof(NVRAM_DATA));
++
++	if(nvramDataGet(&nvramData) < 0)
++		return ZCFG_INTERNAL_ERROR;
++
++	/* Start with the base address */
++	memcpy( pucaMacAddr, nvramData.ucaBaseMacAddr, NVRAM_MAC_ADDRESS_LEN);
++
++	/* Work with only least significant three bytes of base MAC address */
++	macsequence = (pucaMacAddr[3] << 16) | (pucaMacAddr[4] << 8) | pucaMacAddr[5];
++	macsequence = (macsequence + nth) & 0xffffff;
++	pucaMacAddr[3] = (macsequence >> 16) & 0xff;
++	pucaMacAddr[4] = (macsequence >> 8) & 0xff;
++	pucaMacAddr[5] = (macsequence ) & 0xff;
++
++	sprintf(mac ,"%02X%02X%02X%02X%02X%02X",
++		pucaMacAddr[0],
++		pucaMacAddr[1],
++		pucaMacAddr[2],
++		pucaMacAddr[3],
++		pucaMacAddr[4],
++		pucaMacAddr[5]
++	);
++	return ZCFG_SUCCESS;
+ }
+ 
+ zcfgRet_t zyUtilIGetNumberOfMAC(int *num)

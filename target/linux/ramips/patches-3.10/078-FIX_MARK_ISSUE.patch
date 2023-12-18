@@ -1,0 +1,14 @@
+Index: linux-3.10.14/include/uapi/linux/netfilter/xt_mark.h
+===================================================================
+--- linux-3.10.14.orig/include/uapi/linux/netfilter/xt_mark.h	2016-01-08 14:07:00.000000000 +0800
++++ linux-3.10.14/include/uapi/linux/netfilter/xt_mark.h	2019-06-19 17:15:10.195560093 +0800
+@@ -5,6 +5,9 @@
+ 
+ struct xt_mark_tginfo2 {
+ 	__u32 mark, mask;
++#if 1 /* ZyXEL add*/
++	__u8 mode;
++#endif
+ };
+ 
+ struct xt_mark_mtinfo1 {

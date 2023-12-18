@@ -1,0 +1,13 @@
+Index: pure-ftpd-1.0.30/configure.ac
+===================================================================
+--- pure-ftpd-1.0.30.orig/configure.ac
++++ pure-ftpd-1.0.30/configure.ac
+@@ -169,7 +169,7 @@ if test "$ac_cv_lib_nsl_gethostbyname" =
+     AC_MSG_RESULT([success])
+   fi
+ fi
+-LIBS="$LIBS -ljson -lzcfg_msg -lzcmd_tool -lzcfg_fe_rdm_access -lzcfg_fe_rdm_struct -lzyutil"
++LIBS="$LIBS -ljson -lzcfg_msg -lzcmd_tool -lzcfg_fe_rdm_access -lzcfg_fe_rdm_struct -lzyutil -lzos -lzlog"
+ AC_CHECK_LIB(sendfile, sendfile)
+ 
+ dnl Types - continued

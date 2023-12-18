@@ -1,0 +1,167 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-10-14 10:55:22.567736919 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-10-14 10:55:35.343736919 +0800
+@@ -537,6 +537,15 @@
+ 		return ZCFG_INTERNAL_ERROR;
+ 
+ 	strcpy(serianumber, nvramData.SerialNumber);
++#ifdef CONFIG_ZYXEL_OPAL_EXTENDER_WITH_NPACK
++	/* TODO, need to append sub-sequence number */
++#endif
++	return ZCFG_SUCCESS;
++}
++
++zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber)
++{
++	/* TODO */
+ 	return ZCFG_SUCCESS;
+ }
+ 
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-10-14 10:55:22.579736919 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-10-14 10:55:51.215085921 +0800
+@@ -534,6 +534,9 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++/*
++ * The input string must have the length, "SERIAL_NUM_STR_LEN+1".
++ */
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber)
+ {
+ 	struct mrd mrd_buff;
+@@ -543,10 +546,37 @@
+ 
+ 	strcpy(serianumber, mrd_buff.SerialNumber);
+ 
++#ifdef CONFIG_ZYXEL_OPAL_EXTENDER_WITH_NPACK
++	/* need to append sub-sequence number */
++	if( zyUtilIsAlphanumericString(mrd_buff.FeatureBits+MRD_FEATUREBITS_SUB_SERIAL_NUM_OFFSET, MRD_FEATUREBITS_SUB_SERIAL_NUM_LEN) == 0 )
++		strncat(serianumber, mrd_buff.FeatureBits+MRD_FEATUREBITS_SUB_SERIAL_NUM_OFFSET, MRD_FEATUREBITS_SUB_SERIAL_NUM_LEN);
++#endif
+ 	//printf("SerialNumber:%s\n",serianumber);
+ 
+ 	return ZCFG_SUCCESS;
+ }
++
++/*
++ * The input string must have the length, "SUB_SERIAL_NUM_STR_LEN+1".
++ */
++zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber)
++{
++#ifdef CONFIG_ZYXEL_OPAL_EXTENDER_WITH_NPACK
++	struct mrd mrd_buff;
++
++	if(0 != zyUtilGetMrdInfo(&mrd_buff))
++		return -1;
++
++	if( zyUtilIsAlphanumericString(mrd_buff.FeatureBits+MRD_FEATUREBITS_SUB_SERIAL_NUM_OFFSET, MRD_FEATUREBITS_SUB_SERIAL_NUM_LEN) != 0 )
++		return -1;
++
++	strncpy(sub_serianumber, mrd_buff.FeatureBits+MRD_FEATUREBITS_SUB_SERIAL_NUM_OFFSET, MRD_FEATUREBITS_SUB_SERIAL_NUM_LEN);
++
++	//printf("SUB-SerialNumber:%s\n",sub_serianumber);
++#endif
++
++	return ZCFG_SUCCESS;
++}
+ 
+ zcfgRet_t zyUtilIGetGponSerialNumber(char *serianumber)
+ {
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-10-14 10:55:22.567736919 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-10-14 10:55:35.371736919 +0800
+@@ -21,6 +21,7 @@
+ zcfgRet_t zyUtilIGetProductName(char *pdname);
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion);
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber);
++zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber);
+ 
+ #ifdef BROADCOM_PLATFORM
+ zcfgRet_t zyUtilIGetDefaultGponSnPw(char *serianumber, char *password);
+Index: libzyutil-1.0/zyutil.h
+===================================================================
+--- libzyutil-1.0.orig/zyutil.h	2020-10-14 10:55:22.595736919 +0800
++++ libzyutil-1.0/zyutil.h	2020-10-14 10:55:22.607736919 +0800
+@@ -5,7 +5,12 @@
+ 
+ #define MAC_STR_LEN     17
+ #define MAC_ADDR_LEN    6
+-#define SERIAL_NUM_STR_LEN  13
++#ifdef CONFIG_ZYXEL_OPAL_EXTENDER_WITH_NPACK
++#define SERIAL_NUM_STR_LEN  14	// not include EOL
++#else
++#define SERIAL_NUM_STR_LEN  13	// not include EOL
++#endif
++#define SUB_SERIAL_NUM_STR_LEN  1	// not include EOL
+ 
+ /*Common*/
+ void zyUtilIfaceHwAddrGet(char *, char *);
+@@ -243,4 +248,13 @@
+  */
+ int zyUtilIsPrintableString(char *tmp, int len);
+ 
++/*!
++ *  Check the string is alphanumeric.
++ *
++ *  @param[in] char *str        Input string.
++ *  @param[in] int inputLen     Lenth of input string.
++ *  @return                     0:ok; -1:error.
++ */
++int zyUtilIsAlphanumericString(char *tmp, int len);
++
+ #endif
+Index: libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/QUALCOMM/libzyutil_wrapper.c	2020-10-14 10:55:22.215736919 +0800
++++ libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c	2020-10-14 10:55:22.607736919 +0800
+@@ -58,6 +58,16 @@
+ {
+   zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);
+   zcfgLog(ZCFG_LOG_DEBUG, "<< %s\n", __FUNCTION__);
++#ifdef CONFIG_ZYXEL_OPAL_EXTENDER_WITH_NPACK
++  /* TODO, need to append sub-sequence number */
++#endif
++  return ZCFG_SUCCESS;
++}
++
++zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber)
++{
++  zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);
++  zcfgLog(ZCFG_LOG_DEBUG, "<< %s\n", __FUNCTION__);
+   return ZCFG_SUCCESS;
+ }
+ 
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2020-10-14 10:55:22.595736919 +0800
++++ libzyutil-1.0/common.c	2020-10-14 10:55:22.607736919 +0800
+@@ -1822,6 +1822,25 @@
+ }
+ 
+ /*!
++ *  Check the string is alphanumeric.
++ *
++ *  @param[in] char *str        Input string.
++ *  @param[in] int inputLen     Lenth of input string.
++ *  @return                     0:ok; -1:error.
++ */
++int zyUtilIsAlphanumericString(char *tmp, int len){
++    int i=0;
++    for( i=0 ; i<len ; i++ )
++    {
++        if ( ! _common_isalnum(tmp[i]) )
++        {
++            return -1;
++        }
++    }
++    return 0;
++}
++
++/*!
+ *  replace string
+ *  @param[IN/OUT]	source
+ *  @param[IN]	find_str //keyword

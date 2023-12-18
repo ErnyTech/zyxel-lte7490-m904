@@ -1,0 +1,23 @@
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2020-10-12 18:01:59.288950711 +0800
++++ libzyutil-1.0/common.c	2020-10-12 18:03:53.064955152 +0800
+@@ -257,7 +257,9 @@
+ 	}
+ 
+ 	strncpy(tmpdomainName, domainNameStartPtr, (domainNameEndPtr-domainNameStartPtr));
+-
++#if defined(ZYXEL_DNS_TRAFFIC_ROUTE_FUZZY_COMPARE)
++	domainNameStartPtr = tmpdomainName;
++#else
+ 	domainNameStartPtr = strstr(tmpdomainName, "*.");
+ 	if (NULL == domainNameStartPtr) {
+ 		domainNameStartPtr = tmpdomainName;
+@@ -265,6 +267,7 @@
+ 	else {
+ 		domainNameStartPtr += strlen("*.");
+ 	}
++#endif
+ 
+ 	domainNameEndPtr = tmpdomainName + strlen(tmpdomainName);
+ 

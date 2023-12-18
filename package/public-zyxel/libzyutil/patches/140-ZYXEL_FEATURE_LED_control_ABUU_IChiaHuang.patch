@@ -1,0 +1,365 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_brcm_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_brcm_wrapper.h	2020-09-24 10:15:49.178158466 +0000
++++ libzyutil-1.0/BROADCOM/libzyutil_brcm_wrapper.h	2020-09-24 10:15:49.510158463 +0000
+@@ -23,4 +23,92 @@
+ int nvramDataGet(NVRAM_DATA *nvramData);
+ int zyFwInfoGet(ZY_FW_INFO *zyFwInfo);
+ int zyFwInfoNonBootGet(ZY_FW_INFO *zyFwInfo);
++
++#if defined(ABUU_CUSTOMIZATION) //IChiaHuang 20200323
++#define LED_NAME_LEN 24
++int zyLedSet(char *name,int action);
++char* zyLedNameMap(int index);
++int zyLedIndexMaxNumGet(void);
++
++typedef enum {
++    ZY_POWER_G,
++    ZY_POWER_R,
++    ZY_INET_G,
++    ZY_INET_R,
++    ZY_ADSL0,
++    ZY_VDSL0,
++    ZY_ADSL1,
++    ZY_VDSL1,
++    ZY_VOIP0_G,
++    ZY_VOIP0_O,
++    ZY_VOIP1_G,
++    ZY_VOIP1_O,
++    ZY_WLAN0,
++    ZY_WPS0,
++    ZY_WLAN1,
++    ZY_WPS1,
++    ZY_HW_ETH0,
++    ZY_HW_ETH1,
++    ZY_HW_ETH2,
++    ZY_HW_ETH3,
++    ZY_HW_ETH4,
++    ZY_HW_AGGREGATE,
++//  ZY_HW_AGGREGATEACT,
++//  ZY_HW_AGGREGATELNK,
++    ZY_HW_WLAN0,
++    ZY_HW_WLAN1,
++    ZY_KHWLEDALL,
++    ZY_KHWLEDALLEXCEPTPOWER,
++    ZY_MAX_LED
++}ZY_LEDTYPE;
++
++typedef struct
++{
++    char zy_LedName[LED_NAME_LEN];
++    ZY_LEDTYPE index;
++} ZY_LEDCTL_INFO_COMMON, *PZY_LEDCTL_INFO_COMMON;
++
++typedef struct
++{
++    ZY_LEDTYPE ledType;
++    char zy_LedName[LED_NAME_LEN];
++    int index;
++    int port;
++    int control;  //sw : BOARD_IOCTL_LED_CTRL , hw : BOARD_IOCTL_HW_LED_CTRL
++} ZY_LEDCTL_INFO, *PZY_LEDCTL_INFO;
++
++//common(all project) (Add only, don't delete)
++static ZY_LEDCTL_INFO LedctlInfo[] =
++{
++//sw    {ledType        zy_LedName      index            port            control}
++        {ZY_POWER_G,    "POWER_G",      kLedPowerOn,      -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_POWER_R,    "POWER_R",      kLedPostFail,     -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_ADSL0,      "ADSL0",        kLedAdsl,         -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_VDSL0,      "VDSL0",        kLedVdsl,         -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_INET_G,     "INET_G",       kLedInternetData, -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_INET_R,     "INET_R",       kLedInternetData, -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_VOIP0_G,    "VOIP0_G",      kLedVoip1,        -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_VOIP0_O,    "VOIP0_O",      kLedVoip1Msg,     -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_WLAN0,      "Wlan0",        0,                -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_WPS0,       "WPS0",         kLedSes,          -1,             BOARD_IOCTL_LED_CTRL},
++        {ZY_WPS1,       "WPS1",         kLedSes2,         -1,             BOARD_IOCTL_LED_CTRL},
++//hw    {ledType        zy_LedName      index             port            control}
++        {ZY_HW_ETH0,    "eth0",         kHWLedEth,        -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_ETH1,    "eth1",         kHWLedEth,        -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_ETH2,    "eth2",         kHWLedEth,        -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_ETH3,    "eth3",         kHWLedEth,        -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_ETH4,    "eth4",         kHWLedEth,        -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_WLAN1,   "Wlan1",        0,                -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_HW_AGGREGATE,    "AGGREGATE",       kHWLedAggregate,     -1,     BOARD_IOCTL_HW_LED_CTRL},
++      //{ZY_HW_AGGREGATEACT,    "AGGREGATEACT",       kHWLedAggregateAct,     -1,     BOARD_IOCTL_HW_LED_CTRL},
++      //{ZY_HW_AGGREGATELNK,    "AGGREGATELNK",       kHWLedAggregateLnk,     -1,     BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_KHWLEDALLEXCEPTPOWER, "kHWLedAllExceptPower", kHWLedAllExceptPower,     -1,     BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_KHWLEDALL,    "kHWLedAll",      kHWLedAll,          -1,             BOARD_IOCTL_HW_LED_CTRL},
++        {ZY_MAX_LED,    "NULL",         0,                -1,             0}
++};
++#define zyLedctlInfo LedctlInfo
++
++int boardIoctl_LED(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf, int result);
++#endif
++
+ #endif
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-09-24 10:15:49.494158463 +0000
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-09-24 10:15:49.510158463 +0000
+@@ -165,4 +165,16 @@
+ int   ras_size();
+ int   magic_number_check(char *uploadfilename);
+ 
++#if defined(ABUU_CUSTOMIZATION) //IChiaHuang 20200323
++typedef enum
++{
++    ZY_LED_OFF,
++    ZY_LED_ON,
++    ZY_LED_SLOW_BLINK,
++    ZY_LED_FAST_BLINK,
++    ZY_LED_UP,
++    ZY_LED_DOWN,
++    ZY_MAX_LED_ACTION
++}ZY_LED_ACTION;
++#endif
+ #endif // _LIBZYUTIL_WRAPPER_H_
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-09-24 10:15:49.494158463 +0000
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-09-24 10:24:20.006153595 +0000
+@@ -609,6 +609,233 @@
+     return ZCFG_SUCCESS;
+ }
+ #endif
++
++
++
++#if defined(ABUU_CUSTOMIZATION) //IChiaHuang 20200323
++//LED control for different products, added here
++#if defined(ZYPRJ_DX3201_B0)
++static ZY_LEDCTL_INFO_COMMON LedctlInfo_common[] =
++{
++    {"POWER_G", ZY_POWER_G},
++    {"POWER_R", ZY_POWER_R},
++    {"INET_G", ZY_INET_G},
++    {"INET_R", ZY_INET_R},
++    {"ADSL0", ZY_ADSL0},
++    {"VDSL0", ZY_VDSL0},
++    {"VOIP0_G", ZY_VOIP0_G},
++    {"VOIP0_O", ZY_VOIP0_O},
++    {"WLAN0", ZY_WLAN0},
++    {"WPS0", ZY_WPS0},
++    {"WPS1", ZY_WPS1},
++    {"HW_ETH0", ZY_HW_ETH0},
++    {"HW_ETH1", ZY_HW_ETH1},
++    {"HW_ETH2", ZY_HW_ETH2},
++    {"HW_ETH3", ZY_HW_ETH3},
++    {"HW_ETH4", ZY_HW_ETH4},
++    {"HW_AGGREGATE", ZY_HW_AGGREGATE},
++    {"HW_WLAN1", ZY_HW_WLAN1},
++    {"KHWLEDALL", ZY_KHWLEDALL},
++    {"KHWLEDALLEXCEPTPOWER", ZY_KHWLEDALLEXCEPTPOWER},
++    {"ZY_MAX_LED", ZY_MAX_LED}
++};
++#else
++static ZY_LEDCTL_INFO_COMMON LedctlInfo_common[] =
++{
++    {"POWER_G", ZY_POWER_G},
++    {"POWER_R", ZY_POWER_R},
++    {"INET_G", ZY_INET_G},
++    {"INET_R", ZY_INET_R},
++    {"ADSL0", ZY_ADSL0},
++    {"VDSL0", ZY_VDSL0},
++    {"ADSL1", ZY_ADSL1},
++    {"VDSL1", ZY_VDSL1},
++    {"VOIP0_G", ZY_VOIP0_G},
++    {"VOIP0_O", ZY_VOIP0_O},
++    {"VOIP1_G", ZY_VOIP1_G},
++    {"VOIP1_O", ZY_VOIP1_O},
++    {"WLAN0", ZY_WLAN0},
++    {"WPS0", ZY_WPS0},
++    {"WLAN1", ZY_WLAN1},
++    {"WPS1", ZY_WPS1},
++    {"HW_ETH0", ZY_HW_ETH0},
++    {"HW_ETH1", ZY_HW_ETH1},
++    {"HW_ETH2", ZY_HW_ETH2},
++    {"HW_ETH3", ZY_HW_ETH3},
++    {"HW_ETH4", ZY_HW_ETH4},
++    {"HW_AGGREGATE", ZY_HW_AGGREGATE},
++    {"HW_WLAN0", ZY_HW_WLAN0},
++    {"HW_WLAN1", ZY_HW_WLAN1},
++    {"KHWLEDALL", ZY_KHWLEDALL},
++    {"KHWLEDALLEXCEPTPOWER", ZY_KHWLEDALLEXCEPTPOWER},
++    {"ZY_MAX_LED", ZY_MAX_LED}
++};
++#endif
++#define zyLedctlInfo_common LedctlInfo_common
++
++int zyLedIndexMaxNumGet(void)
++{
++    int num = 0;
++    num = (sizeof(zyLedctlInfo_common)/sizeof(ZY_LEDCTL_INFO_COMMON)) - 1;
++    return num;
++}
++
++char* zyLedNameMap(int index)
++{
++    PZY_LEDCTL_INFO_COMMON pLedInfo;
++    pLedInfo = zyLedctlInfo_common;
++    return pLedInfo[index].zy_LedName;
++}
++
++int zyLedSet(char *name, int action) //for userspace (LED control)
++{
++    PZY_LEDCTL_INFO_COMMON pLedInfo;
++    for(pLedInfo = zyLedctlInfo_common; (pLedInfo->index != ZY_MAX_LED); pLedInfo++)
++    {
++        if( !strcmp(name, pLedInfo->zy_LedName))
++        {
++            led_control(pLedInfo->index, action);
++            return 1;
++        }
++    }
++    printf("led_set ERROR");
++    return 0;
++}
++
++int boardIoctl_LED(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf, int result)
++{
++    BOARD_IOCTL_PARMS IoctlParms;
++    int boardFd = 0;
++
++    boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
++    if ( boardFd != -1 ) {
++        IoctlParms.string = string;
++        IoctlParms.strLen = strLen; // led type
++        IoctlParms.offset = offset; // led state
++        IoctlParms.action = action;
++        IoctlParms.buf    = buf;
++        IoctlParms.result = result; // port
++        ioctl(boardFd, board_ioctl, &IoctlParms);
++        close(boardFd);
++        boardFd = IoctlParms.result;
++    } else
++        printf("Unable to open device /dev/brcmboard.\n");
++
++    return boardFd;
++}
++
++int  get_BrcmLedState(ZY_LED_ACTION action) {
++        int state;
++        switch(action) {
++                case ZY_LED_OFF:
++                        state = kLedStateOff;
++                        break;
++                case ZY_LED_ON:
++                        state = kLedStateOn;
++                        break;
++                case ZY_LED_SLOW_BLINK:
++                        state = kLedStateSlowBlinkContinues;
++                        break;
++                case ZY_LED_FAST_BLINK:
++                        state = kLedStateFastBlinkContinues;
++                        break;
++                case ZY_LED_UP:
++                        state = kLedStateUp;
++                        break;
++                case ZY_LED_DOWN:
++                        state = kLedStateDown;
++                        break;
++                default:
++                        state = kLedStateOff;
++                        break;
++        }
++        return state;
++}
++
++void led_control(ZY_LEDTYPE index, ZY_LED_ACTION action)
++{
++    PZY_LEDCTL_INFO pLedInfo;
++    int action_tr = 0;
++
++    action_tr = get_BrcmLedState(action);
++
++    for(pLedInfo = zyLedctlInfo; (pLedInfo->ledType != ZY_MAX_LED); pLedInfo++)
++    {
++        if (index == pLedInfo->ledType)
++        {
++            //printf("led_control : pLedInfo->ledType = %d  index = %d action = %d action_tr = %d\n",pLedInfo->ledType, index, action, action_tr);
++            if (pLedInfo->ledType == ZY_INET_R)
++            {
++#if defined(ZYPRJ_DX5511_B0)
++                boardIoctl_LED(pLedInfo->control, 0, NULL, kLedInternetFail, action_tr, NULL, pLedInfo->port);
++#else
++                if(action == ZY_LED_OFF)
++                {
++                    boardIoctl_LED(pLedInfo->control, 0, NULL, kLedInternetData, action_tr, NULL, pLedInfo->port);
++                }
++                else
++                {
++                    boardIoctl_LED(pLedInfo->control, 0, NULL, kLedInternetData, kLedStateFail, NULL, pLedInfo->port);
++                }
++#endif
++            }
++            else if (pLedInfo->ledType == ZY_WLAN0 || pLedInfo->ledType == ZY_HW_WLAN0)
++            {
++                if(action == ZY_LED_DOWN)
++                {
++                    printf("wl0 LED DOWN\n");
++                    system("/etc/init.d/zywifid_led.sh disable wl0");
++                }
++                else
++                {
++                    printf("wl0 LED UP\n");
++                    system("/etc/init.d/zywifid_led.sh enable wl0");
++                }
++            }
++            else if (pLedInfo->ledType == ZY_WLAN1 || pLedInfo->ledType == ZY_HW_WLAN1)
++            {
++                if(action == ZY_LED_DOWN)
++                {
++                    printf("wl1 LED DOWN\n");
++                    system("/etc/init.d/zywifid_led.sh disable wl1");
++                }
++                else
++                {
++                    printf("wl1 LED UP\n");
++                    system("/etc/init.d/zywifid_led.sh enable wl1");
++                }
++            }
++            else if (pLedInfo->ledType == ZY_KHWLEDALL)
++            {
++                boardIoctl_LED(pLedInfo->control, 0, pLedInfo->zy_LedName, pLedInfo->index, action_tr, NULL, pLedInfo->port);
++                if(action == ZY_LED_DOWN)
++                {
++                    system("/etc/init.d/zywifid_led.sh disable");
++                }
++                else
++                {
++                    system("/etc/init.d/zywifid_led.sh enable");
++                }
++            }
++            else if (pLedInfo->ledType == ZY_KHWLEDALLEXCEPTPOWER)
++            {
++                boardIoctl_LED(pLedInfo->control, 0, pLedInfo->zy_LedName, pLedInfo->index, action_tr, NULL, pLedInfo->port);
++                if(action == ZY_LED_DOWN)
++                {
++                    system("/etc/init.d/zywifid_led.sh disable");
++                }
++                else
++                {
++                    system("/etc/init.d/zywifid_led.sh enable");
++                }
++            }
++            else
++                boardIoctl_LED(pLedInfo->control, 0, pLedInfo->zy_LedName, pLedInfo->index, action_tr, NULL, pLedInfo->port);
++
++        }
++    }
++}
++#else
+ void processLed(const int32_t ledType, const int32_t state)
+ {
+ 	boardIoctl(BOARD_IOCTL_LED_CTRL, 0, NULL, ledType, state, NULL);
+@@ -678,7 +905,7 @@
+ 	processLed(get_BrcmLedIndex(index), get_BrcmLedState(action, blink_rate));
+ 	return ZCFG_SUCCESS;
+ }
+-
++#endif
+ int boardIoctl(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf)
+ {
+     BOARD_IOCTL_PARMS IoctlParms;

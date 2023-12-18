@@ -1,0 +1,47 @@
+--- a/src/rfc2131.c
++++ b/src/rfc2131.c
+@@ -312,36 +312,26 @@ int jjjjj;//Jessie
+         && (opt = option_find(mess, sz, OPTION_SUBNET_SELECT, INADDRSZ)))
+       subnet_addr = option_addr(opt);
+ 
++#ifdef ADD_CLIENT_ID_ON_THE_SAME_MAC
++       char tmpClid[128];//Jessie
++       int jjjjj;//Jessie
++#endif
+     /* If there is no client identifier option, use the hardware address */
+     if ((opt = option_find(mess, sz, OPTION_CLIENT_ID, 1))) {
+         clid_len = option_len(opt);
+         clid = option_ptr(opt, 0);
+-        int iiiiii;
+-        for(iiiiii=0;iiiiii<6;iiiiii++){
+-            if(mess->chaddr[iiiiii]==clid[iiiiii+1]){
+-                //skip
+-            } else {
+-                break;
+-            }
+-        }
+-        if(6==iiiiii){
+-            clid_len = 7;
+-            for(iiiiii=1; iiiiii< 7; iiiiii++)
+-                clid[iiiiii] = int_index;
+-            my_syslog(MS_DHCP | LOG_DEBUG, "%s client id==MAC address", __func__);
+-        } else {
+-            my_syslog(MS_DHCP | LOG_DEBUG, "%s client id!=MAC address", __func__);
+-        }
+     }
++#ifdef ADD_CLIENT_ID_ON_THE_SAME_MAC
+     else {
+-        my_syslog(MS_DHCP | LOG_DEBUG, "%s NO client id,int_index=%d", __func__, int_index);
++        my_syslog(MS_DHCP | LOG_DEBUG, "%s NO client id, iface_name = %s, int_index = %d", __func__, iface_name, int_index);
+         memset(tmpClid, 0, sizeof(tmpClid));
+         clid_len = 7;
+         clid = tmpClid;
+         clid[0] = 1;
+-        for(jjjjj=1; jjjjj< 7; jjjjj++)
++        for(jjjjj=1; jjjjj< clid_len; jjjjj++)
+             clid[jjjjj] = int_index;
+     }
++#endif
+ 
+     /* do we have a lease in store? */
+     lease =

@@ -1,0 +1,83 @@
+diff -urN linux-3.10.14_orig/drivers/net/raeth/raether.c linux-3.10.14/drivers/net/raeth/raether.c
+--- linux-3.10.14_orig/drivers/net/raeth/raether.c	2020-09-22 10:01:00.666225000 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2020-10-29 08:37:58.157704383 +0800
+@@ -47,8 +47,12 @@
+ #endif
+ 
+ #if defined (CONFIG_RA_HW_NAT) || defined (CONFIG_RA_HW_NAT_MODULE)
++#ifdef CONFIG_RA_NAT_HW_IPV6_ZYXEL
++#include "../../../net/nat_20201028/hw_nat/ra_nat.h"
++#else
+ #include "../../../net/nat/hw_nat/ra_nat.h"
+ #endif
++#endif
+ #if defined(CONFIG_RAETH_PDMA_DVT)
+ #include "dvt/raether_pdma_dvt.h"
+ #endif  /* CONFIG_RAETH_PDMA_DVT */
+@@ -1000,9 +1004,28 @@
+ 
+ #if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
+ 		if(ra_sw_nat_hook_rx != NULL) {
++#ifdef CONFIG_RA_NAT_HW_IPV6_ZYXEL	
++			if (IS_SPACE_AVAILABLE_HEAD(rx_skb)) {
++				*(uint32_t *)(FOE_INFO_START_ADDR_HEAD(rx_skb)) =
++				//*(uint32_t *)&rx_ring->rxd_info4;
++				*(uint32_t *)&rx_ring[rx_dma_owner_idx].rxd_info4;
++				FOE_ALG_HEAD(rx_skb) = 0;
++				FOE_MAGIC_TAG_HEAD(rx_skb) = FOE_MAGIC_GE;
++				FOE_TAG_PROTECT_HEAD(rx_skb) = TAG_PROTECT;
++			}
++			if (IS_SPACE_AVAILABLE_TAIL(rx_skb)) {
++				*(uint32_t *)(FOE_INFO_START_ADDR_TAIL(rx_skb) + 2) =
++				//*(uint32_t *)&rx_ring->rxd_info4;
++				*(uint32_t *)&rx_ring[rx_dma_owner_idx].rxd_info4;
++				FOE_ALG_TAIL(rx_skb) = 0;
++				FOE_MAGIC_TAG_TAIL(rx_skb) = FOE_MAGIC_GE;
++				FOE_TAG_PROTECT_TAIL(rx_skb) = TAG_PROTECT;
++			}
++#else
+ 		    FOE_MAGIC_TAG(rx_skb)= FOE_MAGIC_GE;
+ 		    *(uint32_t *)(FOE_INFO_START_ADDR(rx_skb)+2) = *(uint32_t *)&rx_ring[rx_dma_owner_idx].rxd_info4;
+ 		    FOE_ALG(rx_skb) = 0;
++#endif
+ 		}
+ #endif
+ 
+diff -urN linux-3.10.14_orig/net/ipv4/tcp_input.c linux-3.10.14/net/ipv4/tcp_input.c
+--- linux-3.10.14_orig/net/ipv4/tcp_input.c	2020-09-22 10:01:00.678225000 +0800
++++ linux-3.10.14/net/ipv4/tcp_input.c	2020-10-29 13:48:53.109044397 +0800
+@@ -76,8 +76,12 @@
+ #include <net/netdma.h>
+ 
+ #if  defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
++#ifdef CONFIG_RA_NAT_HW_IPV6_ZYXEL
++#include "../nat_20201028/hw_nat/ra_nat.h"
++#else
+ #include "../nat/hw_nat/ra_nat.h"
+ #endif
++#endif
+ 
+ int sysctl_tcp_timestamps __read_mostly = 1;
+ int sysctl_tcp_window_scaling __read_mostly = 1;
+@@ -5098,16 +5102,18 @@
+ 			const struct tcphdr *th, unsigned int len)
+ {
+ 	struct tcp_sock *tp = tcp_sk(sk);
+-
++#ifndef CONFIG_RA_NAT_HW_IPV6_ZYXEL
+ #if  defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
+         if( IS_SPACE_AVAILABLED(skb) &&
+                         ((FOE_MAGIC_TAG(skb) == FOE_MAGIC_PCI) ||
+                          (FOE_MAGIC_TAG(skb) == FOE_MAGIC_WLAN) ||
+                          (FOE_MAGIC_TAG(skb) == FOE_MAGIC_GE))){
+-                FOE_ALG(skb)=1;
++               FOE_ALG(skb)=1;
+         }
+ #endif
+-
++#else
++	hwnat_magic_tag_set_zero(skb);
++#endif
+ 	if (unlikely(sk->sk_rx_dst == NULL))
+ 		inet_csk(sk)->icsk_af_ops->sk_rx_dst_set(sk, skb);
+ 	/*

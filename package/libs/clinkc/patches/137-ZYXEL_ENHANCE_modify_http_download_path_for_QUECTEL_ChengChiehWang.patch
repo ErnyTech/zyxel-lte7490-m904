@@ -1,0 +1,16 @@
+Index: clinkc/include/cybergarage/http/chttp.h
+===================================================================
+--- clinkc.orig/include/cybergarage/http/chttp.h
++++ clinkc/include/cybergarage/http/chttp.h
+@@ -69,7 +69,11 @@ extern "C" {
+ #define CG_HTTP_DATE_MAXLEN 128
+ #ifdef ZYXEL_PATCH
+ #define BOUNDARY_SIZE 256
++#ifdef TARGET_quectel
++#define HTTPD_TMP_PATH "/cache/ufs"
++#else
+ #define HTTPD_TMP_PATH "/tmp"
++#endif // #ifdef TARGET_quectel
+ //#define HTTPD_MAX_UPLOAD_SIZE 41943040
+ #endif
+ 

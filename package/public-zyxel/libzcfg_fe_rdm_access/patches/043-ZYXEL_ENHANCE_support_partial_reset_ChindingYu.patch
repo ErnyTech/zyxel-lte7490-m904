@@ -1,0 +1,38 @@
+--- a/Makefile
++++ b/Makefile
+@@ -11,6 +11,10 @@ ifeq ($(CONFIG_ZCFG_RPC_REQUEST_ADDITION
+ CFLAGS += -DZCFG_RPC_REQUEST_ADDITIONS
+ endif
+ 
++ifeq ($(CONFIG_ZYXEL_PARTIAL_RESET),y)
++CFLAGS += -DZYXEL_PARTIAL_RESET
++endif
++
+ .PHONY : libzcfg_fe_rdm_access
+ 
+ all: clean libzcfg_fe_rdm_access
+--- a/zcfg_fe_rdm_access.c
++++ b/zcfg_fe_rdm_access.c
+@@ -460,7 +460,10 @@ zcfgRet_t zcfgFeReqSend(uint32_t msgType
+ 		case ZCFG_MSG_REQ_REBOOT:
+ 		case ZCFG_MSG_REQ_SYNCFLASH:
+ 		case ZCFG_MSG_REQUEST_GET_PARAM_ATTR_LIST:
+-		case ZCFG_MSG_REQ_SWITCH_BOOT_PARTITION:
++		case ZCFG_MSG_REQ_SWITCH_BOOT_PARTITION:		
++#ifdef ZYXEL_PARTIAL_RESET
++                case REQUEST_PARTIAL_RESTORE_DEFAULT:
++#endif
+ 		case REQUEST_SET_PARAMETERKEY:
+ 			if(payload == NULL || strlen(payload) == 0)
+ 				payloadLen = 0;
+--- a/zcfg_fe_rdm_access.h
++++ b/zcfg_fe_rdm_access.h
+@@ -43,7 +43,7 @@ zcfgRet_t zcfgFeReqSend(uint32_t, char *
+ #define zcfgFeReqSwitchBootPartition(payload)	zcfgFeReqSend(ZCFG_MSG_REQ_SWITCH_BOOT_PARTITION, payload)
+ #define zcfgFeSysLogClean(payload)      zcfgFeReqSend(ZCFG_MSG_CLEAN_SYSLOG, payload)
+ #define zcfgFeSetParamK(payload)       zcfgFeReqSend(REQUEST_SET_PARAMETERKEY, payload)
+-
++#define zcfgFeRestorePartial(payload)   zcfgFeReqSend(REQUEST_PARTIAL_RESTORE_DEFAULT, payload)
+ /*TR98 support*/
+ zcfgRet_t zcfgFeMappingNameGet(uint32_t msgType, char *fullPathName, char *result);
+ 

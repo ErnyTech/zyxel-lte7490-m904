@@ -1,0 +1,12 @@
+Index: zebra-0.93a/zebra/if_ioctl.c
+===================================================================
+--- zebra-0.93a.orig/zebra/if_ioctl.c	2001-07-25 03:37:24.000000000 +0800
++++ zebra-0.93a/zebra/if_ioctl.c	2021-05-04 08:53:01.369042644 +0800
+@@ -227,6 +227,7 @@
+ 	  continue;
+ 	}
+ 
++    if(ifap->ifa_addr && ifap->ifa_addr->sa_family)
+       if (ifap->ifa_addr->sa_family == AF_INET)
+ 	{
+ 	  struct sockaddr_in *addr;

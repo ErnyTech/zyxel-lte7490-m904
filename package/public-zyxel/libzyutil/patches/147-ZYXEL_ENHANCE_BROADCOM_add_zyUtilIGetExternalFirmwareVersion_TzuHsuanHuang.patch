@@ -1,0 +1,36 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-11-09 14:50:10.272784819 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-11-09 14:57:36.825522582 +0800
+@@ -580,6 +580,19 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilIGetExternalFirmwareVersion(char *fwversion)
++{
++	ZY_FW_INFO zyFwInfoData;
++	memset(&zyFwInfoData, 0, sizeof(ZY_FW_INFO));
++
++	if(zyFwInfoGet(&zyFwInfoData) < 0)
++		return ZCFG_INTERNAL_ERROR;
++
++	strcpy(fwversion, zyFwInfoData.FirmwareVersionEx);
++
++	return ZCFG_SUCCESS;
++}
++
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber)
+ {
+ 	NVRAM_DATA nvramData;
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-11-09 14:50:10.272784819 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-11-09 15:00:31.690603709 +0800
+@@ -20,6 +20,7 @@
+ zcfgRet_t zyUtilIGetModelID(char *model_id);
+ zcfgRet_t zyUtilIGetProductName(char *pdname);
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion);
++zcfgRet_t zyUtilIGetExternalFirmwareVersion(char *fwversion);
+ zcfgRet_t zyUtilIGetSerialNumber(char *serianumber);
+ zcfgRet_t zyUtilIGetSubSerialNumber(char *sub_serianumber);
+ zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion);

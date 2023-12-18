@@ -1,0 +1,41 @@
+diff -urN linux-3.10.14_orig/drivers/net/raeth/raether.c linux-3.10.14/drivers/net/raeth/raether.c
+--- linux-3.10.14_orig/drivers/net/raeth/raether.c	2019-02-18 08:23:09.719120481 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2019-02-18 08:25:45.687733300 +0800
+@@ -1023,6 +1023,11 @@
+ #endif  /* CONFIG_RAETH_HW_LRO */
+ #ifdef CONFIG_ETH_SLAB_ALLOC_SKB
+ 		skb = alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN, GFP_ATOMIC);
++#elif defined (CONFIG_ETH_PAGE_ALLOC_SKB)
++		//__MSTC__, Marlon: Reference MTK's modification. Add NET_SKB_PAD when you enable ETH_SKB_ALLOC_SELECT
++		skb = __dev_alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN + NET_SKB_PAD, GFP_ATOMIC);
++		//__MSTC__, Marlon: Uses Unknown. If necessary ,you can enable it.
++		//skb_reserve(skb, NET_SKB_PAD);
+ #else
+     		skb = __dev_alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN, GFP_ATOMIC);
+ #endif
+@@ -3358,6 +3363,11 @@
+ #else
+ #ifdef CONFIG_ETH_SLAB_ALLOC_SKB
+ 		ei_local->netrx0_skbuf[i] = alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN, GFP_ATOMIC);
++#elif defined (CONFIG_ETH_PAGE_ALLOC_SKB)
++		//__MSTC__, Marlon: Reference MTK's modification. Add NET_SKB_PAD when you enable ETH_SKB_ALLOC_SELECT
++		ei_local->netrx0_skbuf[i] = dev_alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN + NET_SKB_PAD);
++		//__MSTC__, Marlon: Uses Unknown. If necessary ,you can enable it.
++		//skb_reserve(ei_local->netrx0_skbuf[i], NET_SKB_PAD);
+ #else
+                 ei_local->netrx0_skbuf[i] = dev_alloc_skb(MAX_RX_LENGTH + NET_IP_ALIGN);
+ #endif
+diff -urN linux-3.10.14_orig/include/linux/skbuff.h linux-3.10.14/include/linux/skbuff.h
+--- linux-3.10.14_orig/include/linux/skbuff.h	2019-02-18 08:23:09.719120481 +0800
++++ linux-3.10.14/include/linux/skbuff.h	2019-02-18 08:25:06.025088600 +0800
+@@ -1865,8 +1865,8 @@
+  * NET_IP_ALIGN(2) + ethernet_header(14) + IP_header(20/40) + ports(8)
+  */
+ #ifndef NET_SKB_PAD
+-#if defined (CONFIG_PPPOPPTP) || defined (CONFIG_PPPOL2TP)
+-#define NET_SKB_PAD             96
++#if defined (CONFIG_PPPOPPTP) || defined (CONFIG_PPPOPPTP_MODULE) || defined (CONFIG_PPPOL2TP) || defined (CONFIG_PPPOL2TP_MODULE)
++#define NET_SKB_PAD             128
+ #define NET_SKB_PAD_ORIG        max(32, L1_CACHE_BYTES)
+ #else
+ #define NET_SKB_PAD             max(32, L1_CACHE_BYTES)

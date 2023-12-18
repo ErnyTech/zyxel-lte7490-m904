@@ -1,0 +1,307 @@
+#!/bin/sh
+#
+# Init file when procd init program is not available
+#
+
+RA_MODULE_DIR=/lib/modules/ralink
+KERNEL_MODULE_DIR=/lib/modules/`uname -r`
+
+mount -a
+etc/init.d/makedevlinks.sh
+
+#cat /etc_ro/motd > /dev/console
+#nvram_daemon&
+#goahead&
+#init_system start
+
+#for console control
+#cd /dev
+#rm -f console
+#ln -s ttyS0 console
+
+#
+#For telnet debugging
+#
+#/usr/sbin/telnetd -l /bin/login.sh
+/usr/sbin/telnetd
+#
+#default busybox date
+#
+#date -s 201805010000
+#
+#check if dual image
+#
+if (`cat /proc/mtd |grep -q Kernel2`) ; then
+    CONFIG_DUAL=y
+    LAN_ETH_IF=eth2
+else
+    CONFIG_DUAL=n
+    LAN_ETH_IF=eth0
+fi
+#
+#default timezone
+#
+#TBD
+
+#/bin/busybox cp -a /usr/etc /tmp
+
+/bin/mkdir -m 0777 -p /tmp/var
+/bin/ln -sf /tmp/var /var
+/bin/mkdir -m 0777 -p /var/lock
+/bin/mkdir -m 0777 -p /var/log
+/bin/mkdir -m 0777 -p /var/run
+#/bin/mkdir -m 0777 -p /var/tmp
+#/bin/mkdir -m 0777 -p /tmp/var/home
+/bin/mkdir -m 0777 -p /var/usb
+/bin/mkdir -m 0777 -p /var/mount
+/bin/mkdir -m 0777 -p /var/wwan
+/bin/mkdir -m 0777 -p /var/zebra
+
+#/bin/ln -sf /tmp/etc/passwd /tmp/var/passwd
+/bin/ln -sf /var/passwd /etc/passwd
+#/bin/ln -sf /var/shadow /etc/shadow
+
+#
+#ftp test accounting
+#
+/bin/mkdir -m 0777 -p /home/ftp
+
+#
+#Overlay fs for development
+#
+if [ "$CONFIG_DUAL" = "n" ]; then
+etc/init.d/ramoverlay.sh
+fi
+#
+#UBIFS for data
+#
+if [ "$CONFIG_DUAL" = "y" ]; then
+etc/init.d/ubimount.sh
+fi
+#
+#insert RA watchdog and start watchdog
+#
+insmod $KERNEL_MODULE_DIR/ralink_wdt.ko
+/usr/bin/watchdog
+
+#
+# load syslog deamon
+#
+# -=LTECPE:REMOVE=- Astro Lin
+# The opal uses syslog-ng but not busybox syslogd
+#syslogd
+# -=LTECPE:REMOVE.end=-
+#
+#load network sysctrl settings in /etc/sysctl.conf
+#
+if [ -f /etc/sysctl.conf ]; then
+        sysctl -e -p >&-
+#       sysctl -e -p  | logger -s -t sysctl
+fi
+#
+# Set CPU affinity according to CPU available cores (default is wifi optimized)
+#
+/usr/sbin/setsmp.sh
+#
+# Others (original rc.local)
+#
+case `cat /proc/cpuinfo | grep MT76` in
+  *7621*)
+    CONFIG_RALINK_MT7621=y
+    ;;
+  *7623*)
+    CONFIG_ARCH_MT7623=y
+    ;;
+esac
+if [ "$CONFIG_RALINK_MT7621" = "y" ]; then
+echo 2048 > /proc/sys/vm/min_free_kbytes
+#echo 2 > /proc/sys/vm/overcommit_memory
+#echo 50 >  /proc/sys/vm/overcommit_ratio
+fi
+
+#set wwan0 rx queue dedicate cpu resource
+if [ -f /sys/class/net/wwan0/queues/rx-0/rps_cpus ]; then
+echo 1 > /sys/class/net/wwan0/queues/rx-0/rps_cpus
+fi
+
+#Other Reference:
+#echo 1 > /proc/sys/net/ipv4/ip_forward
+#echo 1 > /proc/sys/net/ipv4/tcp_syncookies
+#echo 4096 > /proc/sys/net/nf_conntrack_max
+# 6: TCP  17:UDP  
+#echo 6 > /proc/sys/net/netfilter/nf_conntrack_reserve_proto
+#echo 80 > /proc/sys/net/netfilter/nf_conntrack_reserve_port
+#Modify gc_stale_time for IPv6 self test
+#echo 6000 > /proc/sys/net/ipv6/neigh/default/gc_stale_time
+#echo 1 >/proc/sys/net/ipv6/conf/all/forwarding
+#krammer add for LAN can't continuous ping to WAN when exchenging the routing mode
+#bug1126
+#echo 3 > /proc/sys/net/netfilter/nf_conntrack_icmp_timeout 
+#echo 0 > /proc/sys/net/ipv4/conf/default/accept_source_route
+#echo 0 > /proc/sys/net/ipv4/conf/all/accept_source_route
+
+
+#echo "**************cfg_manager init*****************"
+#/userfs/bin/cfg_manager & 
+#sleep 2
+
+#
+#Default lo Network
+#
+ifconfig lo 127.0.0.1
+route add -net 127.0.0.0 netmask 255.255.0.0 lo
+#ifconfig $LAN_ETH_IF 0.0.0.0
+#ifconfig eth0 0.0.0.0 hw ether 00:12:33:44:55:77
+
+#
+#Auto insert all kernel modules
+#
+if [ -d /etc/modules.d ]; then
+	sed -i '/xt_conntrack/d' /etc/modules.d/41-ipt-conntrack
+        cd $KERNEL_MODULE_DIR
+        sed 's/^[^#]/insmod &/' /etc/modules.d/* |sed 's/$/.ko/' |ash 2>&- ||:
+fi
+#
+#Auto insert all ralink modules
+#
+if [ "$CONFIG_DUAL" = "n" ]; then
+
+if [ -d $RA_MODULE_DIR ]; then
+        cd $RA_MODULE_DIR
+        ls | sed 's/^[^#]/insmod &/' |ash 2>&- ||:
+fi
+
+fi
+#
+#insert IPSEC HW module support
+#
+#TBD
+#
+#add bridge control
+#
+##brctl addbr br0
+##brctl addif br0 $LAN_ETH_IF
+
+##brctl setfd br0 0
+##brctl stp br0 off
+#
+#initialize switch
+#
+#TBD
+#
+#bring up LTE module
+#
+if (`grep -q LTE5366 /etc/banner`) ; then
+	gpio l 14 0 4000 0 1 4000
+	sleep 1
+		i2ctest clk 1	
+		i2ctest len 1	
+		i2ctest addr 21	
+		i2ctest write 2 0x1 0x00
+	sleep 1	
+		i2ctest write 2 0x13 0x00
+		i2ctest read 0x13
+	sleep 1
+		i2ctest write 2 0x13 0xff
+		i2ctest read 0x13
+fi
+#
+#bring up WIFI before zyxel package integration.
+#
+insmod $KERNEL_MODULE_DIR/mt7603e.ko
+#Temperal solution before wifid modification:
+/bin/mkdir -p /etc/Wireless/RT2860AP
+ln -s /etc/wireless/mt7603e/mt7603e.dat /etc/Wireless/RT2860AP/RT2860AP.dat
+#Temperal Disable wifid
+#chmod 644 /etc/init.d/zywifid.sh
+##ifconfig ra0 up
+#ifconfig ra0 0.0.0.0 hw ether 01:02:03:04:05:06 
+##brctl addif br0 ra0
+#echo "Now will Shutdown Wifi to Avoid interference during development, please use ifconfig ra0 up to enable again"
+#ifconfig ra0 down
+#
+#Disable MAC interrupt, avoid lan port receive packets.
+#Interrupt Mask Register bit 21 set to 0
+#/usr/bin/sys memwl bfb40004 61460b09
+#/usr/bin/sys memrl bfb40004
+
+#lan_init
+#echo "**************lan port init*****************"
+##ifconfig br0 192.168.1.1
+
+#HOSTNAME=`/userfs/bin/tcapi get Snmpd_Entry sysName`
+# Set the hostname.
+#echo $HOSTNAME > /etc/hostname
+#hostname -F /etc/hostname
+#rm -rf /etc/hostname
+
+#/userfs/bin/tcapi set VlanTag_Entry portsNum 4
+#else
+#/userfs/bin/tcapi set Info_dot1q wan_8021q 1
+#fi
+#fi
+
+#if [ -f /etc/inetd.conf ]; then
+#        /userfs/bin/inetd &
+#fi
+
+#tftp server
+#/userfs/bin/tftpd &
+
+#for zcfg_msg sock
+mkdir -p /var/lib/.sock
+chmod 713 /var/lib/.sock
+chmod 711 /var/lib/
+
+#logrotate
+mkdir -m 755 -p /var/lib
+#/etc/init.d/crond.sh start
+
+#
+#Double check the certificate status in /data/CA directory
+#
+/etc/init.d/check_CACert.sh
+
+#ZyXEL, Chi-Hsiang enable ipv6 in zcmd
+for i in /etc/rc3.d/S*; do
+	if [ -z ${i##*zcmd*} ]; then
+		echo 0 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+	fi
+	$i start
+done
+
+#Temperal Disable wifid
+#chmod 755 /etc/init.d/zywifid.sh
+
+#ZyXEL, Bell, set printk log level at 2 (KERN_ALET)
+#echo 2 > /proc/sys/kernel/printk
+
+# admin use ping
+#test -e /bin/ping && chmod 4777 /bin/ping
+
+#Enable zhttpd
+#export LD_LIBRARY_PATH=/lib/public:/lib/private:/usr/lib:/lib:/usr/lib/ebtables:/usr/lib/iptables
+#/bin/zhttpd &
+
+depmod
+ln -sf /var/modules.dep $KERNEL_MODULE_DIR/modules.dep
+
+#
+#SetStable flags
+#
+#/etc/init.d/SetStable.sh
+
+#
+#ZCMD start for initial development usage
+#
+#if (`grep -q zcmdstop=1 /tmp/.uboot-startup`) ; then
+#echo "Drop to command prompt"
+#else
+#ifconfig $LAN_ETH_IF down ; ifconfig ra0 down
+#brctl delif br0 $LAN_ETH_IF ; brctl delif br0 ra0
+#ifconfig br0 down ; brctl delbr br0
+#zybtnchk &
+#/etc/init.d/zcmd.sh start
+#fi
+
+#this must at the end of RCS----end

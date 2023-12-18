@@ -1,0 +1,62 @@
+Index: busybox-1_20_1/networking/wget.c
+===================================================================
+--- busybox-1_20_1.orig/networking/wget.c	2019-05-22 19:06:55.004784631 +0800
++++ busybox-1_20_1/networking/wget.c	2019-05-22 18:38:30.916787939 +0800
+
+@@ -115,13 +115,13 @@
+ static char TCPOpenRequestTime[64] = DEFAULT_DATETIME;
+ static char TCPOpenResponseTime[64] = DEFAULT_DATETIME;
+ //static char DownloadURL[260] = {0};
+-static unsigned long TotalBytesReceived = 0;
+-static unsigned long TotalBytesSent = 0;
+-static unsigned long TestBytesReceived = 0;
++static unsigned long long TotalBytesReceived = 0;
++static unsigned long long TotalBytesSent = 0;
++static unsigned long long TestBytesReceived = 0;
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ char Latency[33] = {0};
+-static unsigned long BOMTimeMs = 0;
+-static unsigned long EOMTimeMs = 0;
++static unsigned long long BOMTimeMs = 0;
++static unsigned long long EOMTimeMs = 0;
+ #endif
+ static unsigned long long ifBytesReceivedStart = 0;
+ static unsigned long long ifBytesReceivedEnd = 0;
+@@ -225,17 +225,17 @@
+ 	json_object_object_add(diag_result, "EOMTime", json_object_new_string(EOMTime));
+ 	
+ 	// 20160705 Max fix
+-	sprintf(totalByteRecv, "%u", TotalBytesReceived);
++	sprintf(totalByteRecv, "%llu", TotalBytesReceived);
+ 	json_object_object_add(diag_result, "TotalBytesReceived", json_object_new_string(totalByteRecv));
+-	sprintf(testByteRecv, "%u", TestBytesReceived);
++	sprintf(testByteRecv, "%llu", TestBytesReceived);
+ 	json_object_object_add(diag_result, "TestBytesReceived", json_object_new_string(testByteRecv));
+ 
+-        sprintf(totalByteSent, "%u", TotalBytesSent);
++        sprintf(totalByteSent, "%llu", TotalBytesSent);
+         json_object_object_add(diag_result, "TotalBytesSent", json_object_new_string(totalByteSent));
+ 
+ #ifdef ZYXEL_DL_DIAG_CALCULATION
+ 	json_object_object_add(diag_result, "X_ZYXEL_Latency", json_object_new_string(Latency));
+-	sprintf(tmpBuf, "%lu", EOMTimeMs - BOMTimeMs);
++	sprintf(tmpBuf, "%llu", EOMTimeMs - BOMTimeMs);
+ 	json_object_object_add(diag_result, "X_ZYXEL_RoundTripTime", json_object_new_string(tmpBuf));
+ 	sprintf(tmpBuf, "%.3f", ( (TotalBytesReceived > 0) ? ( (double)(TotalBytesReceived * 8) / 1024 / 1024 ) / ( (double)(EOMTimeMs - BOMTimeMs) / 1000000 ) : 0 ) );
+ 	json_object_object_add(diag_result, "X_ZYXEL_DownloadSpeed", json_object_new_string(tmpBuf));
+@@ -291,6 +291,7 @@
+ 
+ void set_priorityMark(int act)
+ {
++#if 0 //MTKSOC platform still not support private MARK filer 
+ 	char cmd[128];
+ 
+ 	if (act == 0){ //del
+@@ -305,6 +306,7 @@
+ 		printf("set_priorityMark (add) cmd:%s\n", cmd);
+ 		system(cmd);
+ 	}
++#endif
+ }
+ 
+ 

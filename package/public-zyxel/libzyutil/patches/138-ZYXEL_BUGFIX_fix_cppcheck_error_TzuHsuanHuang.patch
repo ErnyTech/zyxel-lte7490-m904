@@ -1,0 +1,79 @@
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-09-15 11:04:33.966628564 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-09-15 11:06:28.944168256 +0800
+@@ -275,17 +275,19 @@
+ #if defined (ZYXEL_BOARD_DETECT_BY_GPIO)
+ int zyUtilGetCoFwProductName(char *prname, int prnameLen)
+ {
+-   FILE *pf = fopen(ECONET_COFW_PRODUCT_NAME_PATH, "r");
++	if(!prname){
++		return -1;
++	}
+ 
+-   if(!pf || !prname){
+-     return -1;
+-   }
+-   
+-   int n = fread(prname, 1, prnameLen-1, pf);
+-
+-   fclose(pf);
+-
+-   return n;
++	FILE *pf = fopen(ECONET_COFW_PRODUCT_NAME_PATH, "r");
++	if(pf != NULL){
++		int n = fread(prname, 1, prnameLen-1, pf);
++		fclose(pf);
++		return n;
++	}
++	else{
++		return -1;
++	}
+ }
+ #endif
+ 
+Index: libzyutil-1.0/flash.c
+===================================================================
+--- libzyutil-1.0.orig/flash.c	2020-09-15 11:04:33.854628564 +0800
++++ libzyutil-1.0/flash.c	2020-09-15 11:06:14.281942287 +0800
+@@ -854,6 +854,7 @@
+ 		packageBuf = calloc(WWANPACKAGE_HEADER_LEN, sizeof(char));
+ 		if(packageBuf == NULL){
+ 			printf("packageBuf allocation failed.\n");
++			free(flashwwan);
+ 			return 1;
+ 		}
+ 		zyUtilReadBufFromFlash(mtddev, (void *)flashwwan, ZY_WWANPACKAGE_MAXSIZE);
+@@ -863,8 +864,10 @@
+ 	    }
+ 		if(strncpy(packageBuf, flashwwan, WWANPACKAGE_HEADER_LEN) == NULL ){
+ 			printf("%s: Could not get Revision\n", __func__);
+-			if(flashwwan != NULL)
++			if(flashwwan != NULL){
+ 				free(flashwwan);
++				free(packageBuf);
++			}
+ 			return 1;
+ 		}
+ 		else {
+@@ -890,6 +893,7 @@
+ 	/* use newer Revision */
+ 	if((fwPkgRevision[0] == '\0') && (flashPkgRevision[0] == '\0')){
+ 		printf("%s: Could not get Revision\n", __func__);
++		free(flashwwan);
+ 		return 1;
+ 	}
+ 	else{
+Index: libzyutil-1.0/zyutil_sfp.c
+===================================================================
+--- libzyutil-1.0.orig/zyutil_sfp.c	2020-09-15 11:04:33.918628564 +0800
++++ libzyutil-1.0/zyutil_sfp.c	2020-09-15 11:06:14.300146365 +0800
+@@ -317,7 +317,7 @@
+ 	int i=0;
+ 	
+ 	char ss[DDMI_STRING_MAX_LENGTH] = {0};
+-	unsigned char temp[2] = {0};
++	unsigned char temp[3] = {0};
+ 	
+ 	for(i=0;i<length;i++){
+ 		sprintf(temp, "%02X" ,_string2[i]);

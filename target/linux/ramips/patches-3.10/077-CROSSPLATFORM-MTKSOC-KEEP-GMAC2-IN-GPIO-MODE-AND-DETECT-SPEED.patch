@@ -1,0 +1,146 @@
+--- linux-3.10.14_orig/drivers/net/raeth/raether.c	2019-05-28 10:32:04.056253478 +0800
++++ linux-3.10.14/drivers/net/raeth/raether.c	2019-05-28 14:27:40.887806383 +0800
+@@ -2020,8 +2020,22 @@
+ 	char temp[32] = "\0";
+ 	unsigned int tmp_speed;
+ #endif
+-#ifdef CONFIG_GPIO_LTE7240
++#if defined (CONFIG_GPIO_LTE7240)
+      u8 lan_gpio = 18;
++#elif defined (CONFIG_GPIO_LTE3301P)
++     int lan_gpio[4] = {15, 9, 11, 12};
++     int reverse_port_no = 0;
++		//Reverse the port_no report to ESMD in LTE3301-Plus to adapt ETHWAN change
++		if (port_no == 0)
++			reverse_port_no = 3;
++		else if (port_no == 1)
++			reverse_port_no = 2;
++		else if (port_no == 2)
++			reverse_port_no = 1;
++		else if (port_no == 3)
++			reverse_port_no = 0;
++		else
++			reverse_port_no = 9; //special error value
+ #endif
+ 
+ #if defined (CONFIG_RALINK_RT6855) || defined(CONFIG_RALINK_RT6855A) || \
+@@ -2033,7 +2047,7 @@
+     if(reg_val & 0x1) {
+ 	printk("ESW: Link Status Changed - Port%d Link UP\n", port_no);
+ 
+-#ifdef CONFIG_GPIO_LTE7240
++#if defined (CONFIG_GPIO_LTE7240)
+ 	*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1<<(lan_gpio); //LAN LINK LED ON
+ 	*(unsigned long *)(RALINK_PIO_BASE + 0x20) |= 1<<(lan_gpio);
+ #endif	
+@@ -2041,17 +2055,45 @@
+ #ifdef CONFIG_ZYXEL //ZYXEL
+ 	/*LAN port2 to eth2  */
+ 	if ( ((reg_val >>2) & 0x0003)==2)
++	{
++#if defined (CONFIG_GPIO_LTE3301P)
++		if ((port_no > 0) && (port_no < 3)) /* LAN1 & LAN2 LED is active high */
++		{
++			*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[port_no]);
++			*(unsigned long *)(RALINK_PIO_BASE + 0x20) |= 1 << (lan_gpio[port_no]);
++		}
++		else /* WAN and LAN3 LED is active low */
++		{
++			*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[port_no]);
++			*(unsigned long *)(RALINK_PIO_BASE + 0x20) &= ~(1 << lan_gpio[port_no]);
++		}
++#endif
+ 		tmp_speed=1000;
++	}
+ 	else if ( ((reg_val >>2) & 0x0003)==1)
+ 		tmp_speed=100;
+ 	else if ( ((reg_val >>2) & 0x0003)==0)
+ 		tmp_speed=10;
+ 	else
+ 		tmp_speed=0;
++
++	printk("Port%d speed: %d Mbps.\n", port_no, tmp_speed);
++#if defined (CONFIG_GPIO_LTE3301P)
++	//Reverse the port_no report to ESMD in LTE3301-Plus to adapt ETHWAN change
++	if (reverse_port_no < 4) {
++		if (reverse_port_no == 3)
++		sprintf(temp, "eth2.2:up:%d:%s",tmp_speed,((reg_val >> 1 & 0x1) ? "F":"H"));
++		else if (reverse_port_no == 2)
++		sprintf(temp, "eth2.1:up:%d:%s",tmp_speed,((reg_val >> 1 & 0x1) ? "F":"H"));
++		else
++		sprintf(temp, "eth%d:up:%d:%s", reverse_port_no,tmp_speed,((reg_val >> 1 & 0x1) ? "F":"H"));
++	}
++#else
+ 	sprintf(temp, "eth%d:up:%d:%s", port_no,tmp_speed,((reg_val >> 1 & 0x1) ? "F":"H"));
++#endif 
+ 	kerSysSendtoMonitorTask(MSG_NETLINK_LINK_STATUS_CHANGED,temp,sizeof(temp));
+ 
+-#endif
++#endif //ZYXEL
+ 
+ #if defined (CONFIG_WAN_AT_P0)
+ 	if(port_no==0) {
+@@ -2065,16 +2107,39 @@
+     } else {	    
+ 	printk("ESW: Link Status Changed - Port%d Link Down\n", port_no);
+ 
+-#ifdef CONFIG_GPIO_LTE7240
++#if defined (CONFIG_GPIO_LTE7240)
+ 	*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1<<(lan_gpio); //LAN LINK LED OFF	
+ 	*(unsigned long *)(RALINK_PIO_BASE + 0x20) &= ~(1<<lan_gpio);
++#elif defined (CONFIG_GPIO_LTE3301P)
++	if ((port_no > 0) && (port_no < 3))
++	{
++		*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[port_no]);
++		*(unsigned long *)(RALINK_PIO_BASE + 0x20) &= ~(1 << lan_gpio[port_no]);
++	}
++	else
++	{
++		*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[port_no]);
++		*(unsigned long *)(RALINK_PIO_BASE + 0x20) |= 1 << (lan_gpio[port_no]);
++	}
+ #endif	
+ 
+ #ifdef CONFIG_ZYXEL //ZYXEL
++#if defined (CONFIG_GPIO_LTE3301P)
++        //Reverse the port_no report to ESMD in LTE3301-Plus to adapt ETHWAN change
++	if (reverse_port_no < 4) {
++		if (reverse_port_no == 3)
++		sprintf(temp, "eth2.2:down");
++		else if (reverse_port_no == 2)
++		sprintf(temp, "eth2.1:down");
++		else
++                sprintf(temp, "eth%d:down", reverse_port_no);
++	}
++#else
+ 	sprintf(temp, "eth%d:down", port_no);
++#endif
+ 	kerSysSendtoMonitorTask(MSG_NETLINK_LINK_STATUS_CHANGED,temp,sizeof(temp));
+ 
+-#endif
++#endif //ZYXEL
+     }
+ }
+ #endif
+@@ -5703,6 +5768,21 @@
+ 
+ void LANWANPartition(void)
+ {
++#if defined (CONFIG_GPIO_LTE3301P) //Turn off the speed LED during Ethernet init 
++	int i=0;
++	int lan_gpio[4] = {15, 9, 11, 12};
++	printk("Turn Off All related GPIO LED\n");
++	for(i=0;i<4;i++) {
++		if ((i > 0) && (i < 3)) {
++			*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[i]);
++			*(unsigned long *)(RALINK_PIO_BASE + 0x20) &= ~(1 << lan_gpio[i]);
++		}
++		else {
++			*(unsigned long *)(RALINK_PIO_BASE + 0x00) |= 1 << (lan_gpio[i]);
++			*(unsigned long *)(RALINK_PIO_BASE + 0x20) |= 1 << (lan_gpio[i]);
++		}
++	}
++#endif
+ 	/*Set  MT7530 */
+ #ifdef CONFIG_WAN_AT_P0
+ 	printk("set LAN/WAN WLLLL\n");

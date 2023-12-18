@@ -1,0 +1,269 @@
+--- a/ntpclient.c
++++ b/ntpclient.c
+@@ -143,7 +143,7 @@ struct ntptime {
+ typedef struct {
+ 	char *hostname;
+ 	int port;
+-	struct in_addr addr;
++	struct sockaddr_storage ss;
+ 	unsigned short isResolv;
+ } NTP_SERVER;
+ static int srv_stop = 0;
+@@ -494,39 +494,96 @@ fail:
+ #endif
+ 	return 1;
+ }
+-#ifdef ZyXEL_PATCH
+-char* stuff_net_addr(struct in_addr *p, char *hostname)
+-#else
++
+ static void stuff_net_addr(struct in_addr *p, char *hostname)
+-#endif
+ {
+ 	struct hostent *ntpserver;
+ 	ntpserver=gethostbyname(hostname);
+ 	if (ntpserver == NULL) {
+-		if(debug) herror(hostname);
+-#ifdef ZyXEL_PATCH
+-		return NULL;
+-#else		
++		if(debug) herror(hostname);		
+ 		exit(1);
+-#endif
+ 	}
+ 	if (ntpserver->h_length != 4) {
+ 		/* IPv4 only, until I get a chance to test IPv6 */
+-		fprintf(stderr,"oops %d\n",ntpserver->h_length);
+-#ifdef ZyXEL_PATCH
+-		return NULL;
+-#else			
++		fprintf(stderr,"oops %d\n",ntpserver->h_length);						
+ 		exit(1);
+-#endif
+ 	}
+-#ifdef ZyXEL_PATCH
+-	if(p != NULL) memcpy(&(p->s_addr),ntpserver->h_addr_list[0],4);
+-	return ntpserver->h_addr_list[0];
+-#else
+ 	memcpy(&(p->s_addr),ntpserver->h_addr_list[0],4);
+-#endif
+ }
++#ifdef ZyXEL_PATCH
++static int getaddrbyname(char *host, struct sockaddr_storage *ss)
++{
++	int err;
++	struct addrinfo hints;
++	struct addrinfo *result;
++	struct addrinfo *rp;
++
++	if (!host || !ss) {
++		errno = EINVAL;
++		return 1;
++	}
+ 
++	memset(&hints, 0, sizeof(struct addrinfo));
++	hints.ai_family = AF_UNSPEC;
++	hints.ai_socktype = SOCK_DGRAM;
++	hints.ai_flags = AI_PASSIVE;
++	hints.ai_protocol = 0;
++	hints.ai_canonname = NULL;
++	hints.ai_addr = NULL;
++	hints.ai_next = NULL;
++
++	memset(ss, 0, sizeof(struct sockaddr_storage));
++	err = getaddrinfo(host, NULL, &hints, &result);
++	if (err) {
++		printf("Failed getaddrinfo() for hostname: %s: %s \n", host, gai_strerror(err));
++		return 1;
++	}
++
++	/* The first result will be used. IPV4 has higher priority */
++	for (rp = result; rp; rp = rp->ai_next) {
++		if (rp->ai_family == AF_INET) {
++			memcpy(ss, (struct sockaddr_in *)(rp->ai_addr), sizeof(struct sockaddr_in));
++			break;
++		}
++		if (rp->ai_family == AF_INET6) {
++			memcpy(ss, (struct sockaddr_in6 *)(rp->ai_addr), sizeof(struct sockaddr_in6));
++			break;
++		}
++	}
++	freeaddrinfo(result);
++
++	return 0;
++}
++#endif
++
++#ifdef ZyXEL_PATCH
++static void setup_receive(int usd, short port)
++{
++	struct sockaddr_in6 sin6;
++	const struct in6_addr in6addr_any = IN6ADDR_ANY_INIT;
++	int opt = 0;
++
++	/*
++	 * Setting this means the socket only accepts IPv6 connections
++	 * unset it accepts both IPv6 and IPv4 (mapped address)
++	 * connections.  Must disable it before calling bind()
++	 */
++	if (setsockopt(usd, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt))) {
++		printf("%s: failed setsockopt", __func__);
++		exit(1);
++	}
++
++	memset(&sin6, 0, sizeof(struct sockaddr_in6));
++	sin6.sin6_family = AF_INET6;
++	sin6.sin6_port = htons(port);
++	sin6.sin6_addr = in6addr_any;
++	if (bind(usd, (struct sockaddr *)&sin6, sizeof(sin6)) == -1) {
++		printf("%s: Failed binding to UDP port %u", __func__, port);
++		exit(1);
++	}
++	/* listen(usd,3); this isn't TCP; thanks Alexander! */
++}
++#else
+ static void setup_receive(int usd, unsigned int interface, short port)
+ {
+ 	struct sockaddr_in sa_rcvr;
+@@ -541,44 +598,70 @@ static void setup_receive(int usd, unsig
+ 	}
+ 	/* listen(usd,3); this isn't TCP; thanks Alexander! */
+ }
++#endif
+ 
+ #ifdef ZyXEL_PATCH
+ int setup_transmit(int usd, struct ntp_control *ntpc, int host_idx)
+-#else
+-static void setup_transmit(int usd, char *host, short port, struct ntp_control *ntpc)
+-#endif
+ {
+-#ifdef ZyXEL_PATCH
+ 	if(ntpc == NULL) return 0;
+ 	if(host_idx < 0 || host_idx > ntpc->ntp_server_count)
+ 		return 0;
+ 	char *host;
+ 	int port;
+-#endif
+-	struct sockaddr_in sa_dest;
+-	memset(&sa_dest,0,sizeof sa_dest);
+-	sa_dest.sin_family=AF_INET;
+-#ifdef ZyXEL_PATCH
++	struct sockaddr_storage ss;
++	struct sockaddr_in6 *ipv6;
++	struct sockaddr_in *ipv4;
++	socklen_t len = 0;
+ 	host = ntpc->ntp_server[host_idx].hostname;
+ 	port = ntpc->ntp_server[host_idx].port;
+-	if(stuff_net_addr(&(sa_dest.sin_addr),host) == NULL)
+-		return 0;
++	memset(&ss,0,sizeof( struct sockaddr_storage));
++	while (getaddrbyname(host, &ss)) {
++		if (EINVAL != errno && ntpc->live) {
++			/* Wait here a while, networking is probably not up yet. */
++			sleep(1);
++			continue;
++		}
++
++		if (debug)
++			printf("Unable lookup %s \n", host);
++
++		return 1;
++	}
+ 	ntpc->ntp_server[host_idx].isResolv = 1;
+-	ntpc->ntp_server[host_idx].addr = sa_dest.sin_addr;
++	memcpy(&(ntpc->ntp_server[host_idx].ss), &ss, sizeof(struct sockaddr_storage));
++
++	/* Prefer IPv4 over IPv6, for now */
++	if (ss.ss_family == AF_INET) {
++		ipv4 = (struct sockaddr_in *)(&ss);
++		ipv4->sin_port = htons(port);
++		len = sizeof(struct sockaddr_in);
++	} else if (ss.ss_family == AF_INET6) {
++		ipv6 = (struct sockaddr_in6 *)(&ss);
++		ipv6->sin6_port = htons(port);
++		len = sizeof(struct sockaddr_in6);
++	} else {
++		printf("%s: Unsupported address family", __func__);
++		return 0;
++	}
++	if (connect(usd,(struct sockaddr *)&ss,len)==-1)
++		return 0;
++	else
++		return 1;
++}
+ #else
++static void setup_transmit(int usd, char *host, short port, struct ntp_control *ntpc)
++{
++	struct sockaddr_in sa_dest;
++	memset(&sa_dest,0,sizeof sa_dest);
++	sa_dest.sin_family=AF_INET;
+ 	stuff_net_addr(&(sa_dest.sin_addr),host);
+-#endif
+ 	memcpy(ntpc->serv_addr,&(sa_dest.sin_addr),4); /* XXX asumes IPv4 */
+ 	sa_dest.sin_port=htons(port);
+ 	if (connect(usd,(struct sockaddr *)&sa_dest,sizeof sa_dest)==-1)
+-#ifdef ZyXEL_PATCH	
+-		return 0;
+-	else
+-		return 1;
+-#else
+ 		{perror("connect");exit(1);}
+-#endif
+ }
++#endif
++
+ #ifdef ZyXEL_PATCH
+ int ntp_handle(int usd, struct ntp_control *ntpc, int *_e){
+ 	struct sockaddr sa_xmit;
+@@ -910,19 +993,19 @@ int main(int argc, char *argv[]) {
+ 	signal(SIGQUIT, &stop_handler);
+ #endif	
+ 	
+-#ifdef ZyXEL_PATCH		
+-	for (ntp_idx = 0;srv_stop == 0;) {
++#ifdef ZyXEL_PATCH	
++	for (ntp_idx = 0;srv_stop == 0;) {	
+ 		if ((probes_sent >= ntpc.probe_count && ntpc.probe_count != 0)) {
+ 			break;
+ 		}
+ 		/* Startup sequence */
+-		if ((usd=socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP))==-1)
++		if ((usd=socket(AF_INET6,SOCK_DGRAM,IPPROTO_UDP))==-1)
+ 			{perror ("socket");exit(1);}
+ 
+-		setup_receive(usd, INADDR_ANY, udp_local_port);
++		setup_receive(usd, udp_local_port);
+ 		
+ 		if(ntp_idx >= ntpc.ntp_server_count) ntp_idx = 0;	
+-		if(!setup_transmit(usd, &ntpc, ntp_idx)){
++		if(!setup_transmit(usd, &ntpc, ntp_idx)) {
+ 			if(onstarting)
+ 			{
+ 				sleep(ONSTARTING_SETUPTRANS_SUSPEND_TIME);
+@@ -933,10 +1016,22 @@ int main(int argc, char *argv[]) {
+ 			continue;
+ 		}
+ 		
+-		if (debug)
+-			printf("Connect NTP server %s (%s)\n", 
+-				ntpc.ntp_server[ntp_idx].hostname, 
+-				inet_ntoa(ntpc.ntp_server[ntp_idx].addr));
++		if (debug) {
++			struct sockaddr_in6 *ipv6;
++			struct sockaddr_in *ipv4;
++			char str[INET_ADDRSTRLEN];
++			if (ntpc.ntp_server[ntp_idx].ss.ss_family == AF_INET) {
++				ipv4 = (struct sockaddr_in *)(&(ntpc.ntp_server[ntp_idx].ss));
++				printf("Connect NTP server %s (%s)\n", 
++					ntpc.ntp_server[ntp_idx].hostname, 
++					inet_ntop(AF_INET, &(ipv4->sin_addr), str, INET_ADDRSTRLEN));
++			} else if (ntpc.ntp_server[ntp_idx].ss.ss_family == AF_INET6) {
++				ipv6 = (struct sockaddr_in6 *)(&(ntpc.ntp_server[ntp_idx].ss));
++				printf("Connect NTP server %s (%s)\n", 
++					ntpc.ntp_server[ntp_idx].hostname, 
++					inet_ntop(AF_INET6, &(ipv6->sin6_addr), str, INET6_ADDRSTRLEN));
++			}
++		}
+ 		
+ 		if(!ntp_handle(usd, &ntpc, &err))
+ 		{

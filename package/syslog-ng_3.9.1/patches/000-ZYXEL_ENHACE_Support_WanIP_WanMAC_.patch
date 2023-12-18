@@ -1,0 +1,91 @@
+diff -urN syslog-ng-3.9.1.orig/lib/cfg-grammar.y syslog-ng-3.9.1/lib/cfg-grammar.y
+--- syslog-ng-3.9.1.orig/lib/cfg-grammar.y	2019-04-26 16:42:31.830378134 +0800
++++ syslog-ng-3.9.1/lib/cfg-grammar.y	2019-04-26 17:11:55.714398522 +0800
+@@ -330,6 +330,9 @@
+ 
+ %token KW_RETRIES                     10511
+ 
++%token KW_WAN_IP                      10512 
++%token KW_WAN_MAC                     10513
++
+ /* END_DECLS */
+ 
+ %code {
+@@ -909,6 +912,8 @@
+ 	| KW_LOG_MSG_SIZE '(' LL_NUMBER ')'	{ configuration->log_msg_size = $3; }
+ 	| KW_KEEP_TIMESTAMP '(' yesno ')'	{ configuration->keep_timestamp = $3; }
+ 	| KW_CREATE_DIRS '(' yesno ')'		{ configuration->create_dirs = $3; }
++	| KW_WAN_IP '(' string ')'              { configuration->wan_ip = $3; }
++	| KW_WAN_MAC '(' string ')'             { configuration->wan_mac = $3; }
+         | KW_CUSTOM_DOMAIN '(' string ')'       { configuration->custom_domain = g_strdup($3); free($3); }
+ 	| KW_FILE_TEMPLATE '(' string ')'	{ configuration->file_template_name = g_strdup($3); free($3); }
+ 	| KW_PROTO_TEMPLATE '(' string ')'	{ configuration->proto_template_name = g_strdup($3); free($3); }
+diff -urN syslog-ng-3.9.1.orig/lib/cfg.h syslog-ng-3.9.1/lib/cfg.h
+--- syslog-ng-3.9.1.orig/lib/cfg.h	2019-04-26 16:42:31.554378130 +0800
++++ syslog-ng-3.9.1/lib/cfg.h	2019-04-26 16:48:21.030382170 +0800
+@@ -81,6 +81,8 @@
+   gboolean keep_hostname;
+   gboolean check_hostname;
+   gboolean bad_hostname_compiled;
++  gchar *wan_ip;
++  gchar *wan_mac;
+   regex_t bad_hostname;
+   gchar *bad_hostname_re;
+   gchar *custom_domain;
+diff -urN syslog-ng-3.9.1.orig/lib/cfg-parser.c syslog-ng-3.9.1/lib/cfg-parser.c
+--- syslog-ng-3.9.1.orig/lib/cfg-parser.c	2019-04-26 16:42:31.722378132 +0800
++++ syslog-ng-3.9.1/lib/cfg-parser.c	2019-04-26 17:20:33.058404502 +0800
+@@ -110,6 +110,8 @@
+   { "use_time_recvd",     KW_USE_TIME_RECVD, KWS_OBSOLETE, "Use R_ or S_ prefixed macros in templates or keep_timestamp(no)" },
+   { "use_fqdn",           KW_USE_FQDN },
+   { "use_dns",            KW_USE_DNS },
++  { "wan_ip",		  KW_WAN_IP },
++  { "wan_mac",		  KW_WAN_MAC },
+   { "time_reopen",        KW_TIME_REOPEN },
+   { "time_reap",          KW_TIME_REAP },
+   { "time_sleep",         KW_TIME_SLEEP, KWS_OBSOLETE, "time_sleep() has been deprecated" },
+diff -urN syslog-ng-3.9.1.orig/lib/template/macros.c syslog-ng-3.9.1/lib/template/macros.c
+--- syslog-ng-3.9.1.orig/lib/template/macros.c	2019-04-26 16:42:31.558378130 +0800
++++ syslog-ng-3.9.1/lib/template/macros.c	2019-04-26 17:46:59.330422837 +0800
+@@ -159,6 +159,8 @@
+   { "SDATA", M_SDATA },
+   { "MSGHDR", M_MSGHDR },
+   { "SOURCEIP", M_SOURCE_IP },
++  { "LOCALIP", M_LOCAL_IP },
++  { "MACADDR", M_MACADDR },
+   { "SEQNUM", M_SEQNUM },
+   { "CONTEXT_ID", M_CONTEXT_ID },
+   { "_", M_CONTEXT_ID },
+@@ -432,6 +434,20 @@
+       break;
+     }
+ 
++    case M_LOCAL_IP:
++    {
++      if(configuration->wan_ip != NULL)
++        result_append(result, configuration->wan_ip, strlen(configuration->wan_ip), escape);
++      break;
++    }
++    
++    case M_MACADDR:
++    {
++      if(configuration->wan_mac != NULL)
++        result_append(result, configuration->wan_mac, strlen(configuration->wan_mac), escape);
++      break;
++    }
++    
+     default:
+     {
+       /* year, month, day */
+diff -urN syslog-ng-3.9.1.orig/lib/template/macros.h syslog-ng-3.9.1/lib/template/macros.h
+--- syslog-ng-3.9.1.orig/lib/template/macros.h	2019-04-26 16:42:31.558378130 +0800
++++ syslog-ng-3.9.1/lib/template/macros.h	2019-04-26 17:36:50.014415794 +0800
+@@ -48,6 +48,8 @@
+   M_MSGHDR,
+   M_MESSAGE,
+   M_SOURCE_IP,
++  M_LOCAL_IP,
++  M_MACADDR,
+   M_SEQNUM,
+   M_CONTEXT_ID,
+ 

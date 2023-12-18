@@ -1,0 +1,13 @@
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-11-19 11:18:51.893052484 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-11-19 11:20:22.280879137 +0800
+@@ -28,7 +28,7 @@
+ #ifdef BROADCOM_PLATFORM
+ zcfgRet_t zyUtilIGetDefaultGponSnPw(char *serianumber, char *password);
+ 
+-#if defined(ZYXEL_BOARD_DETECT_BY_GPIO)
++#if defined(ZYXEL_BOARD_DETECT_BY_GPIO) || defined(CONFIG_BCM96856) || defined(CONFIG_BCM96858)
+ //Reference bcmdrivers/opensource/include/bcm963xx/board.h
+ #define ZYXEL_RDPA_WAN_TYPE_VALUE_XGS     "XGS"	//simulate RDPA_WAN_TYPE_VALUE_XGS
+ #define ZYXEL_RDPA_WAN_TYPE_VALUE_GBE     "GBE" //simulate RDPA_WAN_TYPE_VALUE_GBE

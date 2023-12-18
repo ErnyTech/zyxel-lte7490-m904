@@ -1,0 +1,328 @@
+diff -urN mosquitto-1.6.7/client/client_shared.c mosquitto-1.6.7_new/client/client_shared.c
+--- mosquitto-1.6.7/client/client_shared.c	2020-01-13 19:05:19.136555478 +0800
++++ mosquitto-1.6.7_new/client/client_shared.c	2020-01-13 18:45:00.367486500 +0800
+@@ -130,7 +130,8 @@
+ 	cfg->keepalive = 60;
+ 	cfg->clean_session = true;
+ 	cfg->eol = true;
+-	cfg->repeat_count = 1;
++	//cfg->repeat_count = 1;
++	cfg->repeat_count = 0;//Jessie forever loop
+ 	cfg->repeat_delay.tv_sec = 0;
+ 	cfg->repeat_delay.tv_usec = 0;
+ 	if(pub_or_sub == CLIENT_RR){
+@@ -908,6 +909,14 @@
+ #endif
+ 			}
+ 			i++;
++
++//#ifdef ZYXEL_MQTT_PUBLISHER
++#if 1
++		//informaion for deleting process
++		}else if(!strcmp(argv[i], "--parentIndex")){
++			cfg->parentIndex = atoi(argv[i+1]);
++			i++;
++#endif
+ 		}else if(!strcmp(argv[i], "-M")){
+ 			if(i==argc-1){
+ 				fprintf(stderr, "Error: -M argument given but max_inflight not specified.\n\n");
+@@ -1020,7 +1029,7 @@
+ 				return 1;
+ 			}else{
+ 				cfg->repeat_count = atoi(argv[i+1]);
+-				if(cfg->repeat_count < 1){
++				if(cfg->repeat_count < 0){
+ 					fprintf(stderr, "Error: --repeat argument must be >0.\n\n");
+ 					return 1;
+ 				}
+diff -urN mosquitto-1.6.7/client/client_shared.h mosquitto-1.6.7_new/client/client_shared.h
+--- mosquitto-1.6.7/client/client_shared.h	2020-01-13 19:05:16.289971739 +0800
++++ mosquitto-1.6.7_new/client/client_shared.h	2020-01-13 16:50:50.334228200 +0800
+@@ -122,6 +122,7 @@
+ 	int message_count; /* pub */
+ 	char **files; /* pub */
+ 	int file_count; /* pub */
++	int parentIndex;
+ #endif
+ };
+ 
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_new/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-01-13 19:05:13.110281713 +0800
++++ mosquitto-1.6.7_new/client/pub_client.c	2020-01-13 18:47:26.599483500 +0800
+@@ -34,7 +34,9 @@
+ #include <mosquitto.h>
+ #include "client_shared.h"
+ #include "pub_shared.h"
+-
++#include<unistd.h>//Jessie
++#include<signal.h>//Jessie
++//#include <pthread.h>//Jessie
+ /* Global variables for use in callbacks. See sub_client.c for an example of
+  * using a struct to hold variables for use in callbacks. */
+ static bool first_publish = true;
+@@ -46,6 +48,12 @@
+ static int publish_count = 0;
+ static bool ready_for_repeat = false;
+ 
++#if 1//Jessie
++int client_to_server;
++char *myfifo = "/tmp/client_to_server_fifo";
++//#define BUFSIZ 128
++#endif
++
+ #ifdef WIN32
+ static uint64_t next_publish_tv;
+ 
+@@ -210,7 +218,7 @@
+ 			mosquitto_disconnect_v5(mosq, 0, cfg.disconnect_props);
+ 			disconnect_sent = true;
+ 		}
+-	}else if(publish_count < cfg.repeat_count){
++	}else if((publish_count < cfg.repeat_count) || (0==cfg.repeat_count)){
+ 		ready_for_repeat = true;
+ 		set_repeat_time();
+ 	}else if(disconnect_sent == false){
+@@ -239,9 +247,14 @@
+ 	char *buf2;
+ 	int buf_len_actual;
+ 	int mode;
+-	int loop_delay = 1000;
++	//int loop_delay = 1000;
++	int loop_delay = 500;//Jessie shorten the loop delay
++	int i;//Jessie
++	int argc;//Jessie
++	char **argv;//Jessie
+ 	bool stdin_finished = false;
+-
++	char buf[256];
++	char backup[256];
+ 	if(cfg.repeat_count > 1 && (cfg.repeat_delay.tv_sec == 0 || cfg.repeat_delay.tv_usec != 0)){
+ 		loop_delay = cfg.repeat_delay.tv_usec / 2000;
+ 	}
+@@ -255,6 +268,10 @@
+ 
+ 	do{
+ 		if(mode == MSGMODE_STDIN_LINE){
++			//printf("%s() AAA \n", __FUNCTION__);
++			memset(buf, 0, sizeof(buf));
++						read(client_to_server, buf, sizeof(buf));//Jessie QQQ
++						//printf("%s() AAA buf=%s\n", __FUNCTION__, buf);
+ 			if(status == STATUS_CONNACK_RECVD){
+ 				pos = 0;
+ 				read_len = line_buf_len;
+@@ -262,11 +279,57 @@
+ 					buf_len_actual = strlen(line_buf);
+ 					if(line_buf[buf_len_actual-1] == '\n'){
+ 						line_buf[buf_len_actual-1] = '\0';
++						#if 1//ZYXEL_MQTT_PUBLISHER
++						if(strlen(line_buf) != 0){
++							snprintf(backup, sizeof(backup), "%s", line_buf);
++							char *delim = " ";
++							char * pch;
++							argc = 0;
++							//printf ("Splitting string \"%s\" into tokens:\n",line_buf);
++							pch = strtok(line_buf,delim);
++							while (pch != NULL)
++							{
++								//printf ("pch=%s\n",pch);
++								argc++;
++								pch = strtok (NULL, delim);
++							}
++							argv = malloc( argc * sizeof(char *) );
++							if(argv){
++								//argv[argc] = malloc( 1 + strlen(pch) );
++								char *delim = " ";
++								char * pch;
++								argc = 0;
++								//printf ("Splitting string \"%s\" into tokens:\n",backup);
++								pch = strtok(backup,delim);
++								while (pch != NULL)
++								{
++									//printf ("pch=%s\n",pch);
++									argv[argc] = malloc( 1 + strlen(pch) );
++									if(argv[argc]){
++										sprintf(argv[argc], "%s", pch);
++										argv[argc][strlen(pch)] = '\0';
++										//printf ("argv[%d]=%s\n", argc, argv[argc]);
++									}
++									argc++;
++									pch = strtok (NULL, delim);
++								}
++							}
++							rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
++
++							//printf ("%s() Jessie 333333333, rc=%d\n", __FUNCTION__, rc);
++							for(i=0;i<cfg.topic_count;i++){
++								//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
++								rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
++							}
++						}
++						#endif//ZYXEL_MQTT_PUBLISHER
+ 						rc2 = my_publish(mosq, &mid_sent, cfg.topic, buf_len_actual-1, line_buf, cfg.qos, cfg.retain);
++						#if 0//Jessie test
+ 						if(rc2){
+ 							err_printf(&cfg, "Error: Publish returned %d, disconnecting.\n", rc2);
+ 							mosquitto_disconnect_v5(mosq, MQTT_RC_DISCONNECT_WITH_WILL_MSG, cfg.disconnect_props);
+ 						}
++						#endif
+ 						break;
+ 					}else{
+ 						line_buf_len += 1024;
+@@ -318,7 +381,55 @@
+ 					case MSGMODE_CMD:
+ 					case MSGMODE_FILE:
+ 					case MSGMODE_STDIN_FILE:
++						//printf("%s() 111 \n", __FUNCTION__);
++						memset(buf, 0, sizeof(buf));
++						read(client_to_server, buf, sizeof(buf));//Jessie QQQ
++						//printf("%s() 111 buf=%s\n", __FUNCTION__, buf);
++						#if 1//ZYXEL_MQTT_PUBLISHER
++						if(strlen(buf) != 0){
++							snprintf(backup, sizeof(backup), "%s", buf);
++							char *delim = " ";
++							char * pch;
++							argc = 0;
++							//printf ("Splitting string \"%s\" into tokens:\n",buf);
++							pch = strtok(buf,delim);
++							while (pch != NULL)
++							{
++								//printf ("pch=%s\n",pch);
++								argc++;
++								pch = strtok (NULL, delim);
++							}
++							argv = malloc( argc * sizeof(char *) );
++							if(argv){
++								//argv[argc] = malloc( 1 + strlen(pch) );
++								char *delim = " ";
++								char * pch;
++								argc = 0;
++								//printf ("Splitting string \"%s\" into tokens:\n",backup);
++								pch = strtok(backup,delim);
++								while (pch != NULL)
++								{
++									//printf ("pch=%s\n",pch);
++									argv[argc] = malloc( 1 + strlen(pch) );
++									if(argv[argc]){
++										sprintf(argv[argc], "%s", pch);
++										argv[argc][strlen(pch)] = '\0';
++										//printf ("argv[%d]=%s\n", argc, argv[argc]);
++									}
++									argc++;
++									pch = strtok (NULL, delim);
++								}
++							}
++							rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
++							//printf ("%s() Jessie 333333333, rc=%d\n", __FUNCTION__, rc);
++							for(i=0;i<cfg.topic_count;i++){
++								//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
++								rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
++							}
++						}
++						#else
+ 						rc = my_publish(mosq, &mid_sent, cfg.topic, cfg.msglen, cfg.message, cfg.qos, cfg.retain);
++						#endif
+ 						break;
+ 					case MSGMODE_NULL:
+ 						rc = my_publish(mosq, &mid_sent, cfg.topic, 0, NULL, cfg.qos, cfg.retain);
+@@ -453,11 +564,29 @@
+ 	printf("\nSee https://mosquitto.org/ for more information.\n\n");
+ }
+ 
++#if 1 //ZYXEL_MQTT_PUBLISHER
++#if 0
++void* child(void* data) {
++  char *str = (char*) data; // 取得輸入資料
++  int i;
++  for(i = 0;i < 3;++i) {
++    printf("%s\n", str); // 每秒輸出文字
++    sleep(1);
++  }
++  pthread_exit(NULL); // 離開子執行緒
++}
++#endif
++#endif
++
+ int main(int argc, char *argv[])
+ {
+ 	struct mosquitto *mosq = NULL;
+ 	int rc;
+-
++	//char buf[256];
++	pid_t pid = -1;//Jessie
++	char pid_file[32];//Jessie
++	FILE *fp = NULL;//Jessie
++	pthread_t thread;
+ 	mosquitto_lib_init();
+ 
+ 	if(pub_shared_init()) return 1;
+@@ -472,19 +601,21 @@
+ 		}
+ 		goto cleanup;
+ 	}
+-
++//printf("%s() 1111111111111111111\n", __FUNCTION__);
+ #ifndef WITH_THREADING
+ 	if(cfg.pub_mode == MSGMODE_STDIN_LINE){
+ 		fprintf(stderr, "Error: '-l' mode not available, threading support has not been compiled in.\n");
+ 		goto cleanup;
+ 	}
+ #endif
+-		
++//printf("%s() 2222222222222222222\n", __FUNCTION__);		
+ 	if(cfg.pub_mode == MSGMODE_STDIN_FILE){
++		#if 0//Jessie ignore load_stdin()
+ 		if(load_stdin()){
+ 			err_printf(&cfg, "Error loading input from stdin.\n");
+ 			goto cleanup;
+ 		}
++		#endif
+ 	}else if(cfg.file_input){
+ 		if(load_file(cfg.file_input)){
+ 			err_printf(&cfg, "Error loading input file \"%s\".\n", cfg.file_input);
+@@ -523,6 +654,19 @@
+ 	mosquitto_disconnect_v5_callback_set(mosq, my_disconnect_callback);
+ 	mosquitto_publish_v5_callback_set(mosq, my_publish_callback);
+ 
++	#if 0
++	mkfifo(myfifo, 0666);//Jessie
++	client_to_server = open(myfifo, O_RDONLY);//Jessie
++	//memset(buf, 0, sizeof(buf));
++	//read(client_to_server, buf, BUFSIZ);
++	#endif
++	
++	//int err1;
++	//int i;
++	//pthread_t t;
++//	err1 = pthread_create(&thread, NULL, fn, &i);
++//pthread_create(&t, NULL, child, "Child");
++	
+ 	if(client_opts_set(mosq, &cfg)){
+ 		goto cleanup;
+ 	}
+@@ -532,6 +676,18 @@
+ 		goto cleanup;
+ 	}
+ 
++
++	pid = getpid();//Jessie
++	//printf("%s() Jessie pid=%d\n", __FUNCTION__, pid);//Jessie
++	snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);//Jessie
++	fp = fopen(pid_file, "w+");
++	if(fp == NULL){
++		goto cleanup;
++	}
++	fprintf(fp, "%d", pid);
++	fclose(fp);
++	fp = NULL;
++
+ 	rc = pub_shared_loop(mosq);
+ 
+ //#ifndef ZYXEL_MQTT_PUBLISHER
+@@ -554,5 +710,7 @@
+ 	mosquitto_lib_cleanup();
+ 	client_config_cleanup(&cfg);
+ 	pub_shared_cleanup();
++	close(client_to_server);
++	unlink(myfifo);
+ 	return 1;
+ }

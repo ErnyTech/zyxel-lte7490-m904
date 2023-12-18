@@ -1,0 +1,124 @@
+Index: busybox-1_20_1/networking/ping.c
+===================================================================
+--- busybox-1_20_1.orig/networking/ping.c	2021-08-04 16:58:04.201721368 +0800
++++ busybox-1_20_1/networking/ping.c	2021-08-04 16:49:18.561591600 +0800
+@@ -160,7 +160,9 @@
+ #define zcfg_host_and_af2sockaddr xhost_and_af2sockaddr
+ #define zcfg_output_diagstat_and_exit(diagstatstr){ }
+ #endif
+-
++#ifdef ZCFG_SUPPORT_TR369//TR-369
++uint16_t input_pid;
++#endif
+ 
+ 
+ enum {
+@@ -321,8 +323,27 @@
+ 
+ 
+ /* Full(er) version */
+-
++#ifdef ZCFG_SUPPORT_TR369//TR-369
++#define OPT_STRING ("qvc:p:s:t:w:W:I:4" IF_PING6("6"))//TR-369 add p:
++#else
+ #define OPT_STRING ("qvc:s:t:w:W:I:4" IF_PING6("6"))
++#endif
++
++#ifdef ZCFG_SUPPORT_TR369//TR-369 add OPT_p
++enum {
++	OPT_QUIET = 1 << 0,
++	OPT_VERBOSE = 1 << 1,
++	OPT_c = 1 << 2,
++	OPT_p = 1 << 3,//TR-369 add OPT_p
++	OPT_s = 1 << 4,
++	OPT_t = 1 << 5,
++	OPT_w = 1 << 6,
++	OPT_W = 1 << 7,
++	OPT_I = 1 << 8,
++	OPT_IPV4 = 1 << 9,
++	OPT_IPV6 = (1 << 10) * ENABLE_PING6,
++};
++#else
+ enum {
+ 	OPT_QUIET = 1 << 0,
+ 	OPT_VERBOSE = 1 << 1,
+@@ -334,8 +355,8 @@
+ 	OPT_I = 1 << 7,
+ 	OPT_IPV4 = 1 << 8,
+ 	OPT_IPV6 = (1 << 9) * ENABLE_PING6,
+-};
+-
++};	
++#endif
+ 
+ struct globals {
+ 	int pingsock;
+@@ -430,6 +451,7 @@
+ 
+ /**************************************************************************/
+ #ifdef ZCFG_SUPPORT
++#define DIAG_RESULT_PATH "/var/diagResult"
+ zcfgRet_t pingMsgSend(int msg_type, int payloadLen, const char *payload)
+ {
+ 	zcfgRet_t ret;
+@@ -438,7 +460,10 @@
+ 	zcfgMsg_t *sendMsgHdr = NULL;
+ 	char *recv_str = NULL;
+ 	int buf_size = 0;
+-
++#ifdef ZCFG_SUPPORT_TR369
++	char test[128];//TR-369
++	FILE *fp = NULL;//TR-369
++#endif
+ 	buf_size = sizeof(zcfgMsg_t)+payloadLen+1;
+ 	sendBuf = malloc(buf_size);
+ 	memset(sendBuf, 0, buf_size);
+@@ -451,7 +476,14 @@
+ 
+ 	if(payload != NULL)
+ 		memcpy(sendBuf+sizeof(zcfgMsg_t), payload, payloadLen);
+-
++#ifdef ZCFG_SUPPORT_TR369
++	snprintf(test, sizeof(test), "%s.ping%u", DIAG_RESULT_PATH, input_pid);
++	fp = fopen(test, "w+");
++	if(fp){
++		fprintf(fp, "%s", payload);
++		fclose(fp);
++	}
++#endif
+ 	ret = zcfgMsgSendAndGetReply(sendMsgHdr, (zcfgMsg_t **)&recvBuf, 0);
+ 
+ 	if(ret == ZCFG_SUCCESS) {
+@@ -1216,12 +1248,18 @@
+ {
+ 	char *str_s;
+ 	char *hostlist;
+-
++#ifdef ZCFG_SUPPORT_TR369//TR-369
++	char *str_p = NULL;
++#endif	
+ 	INIT_G();
+ 
+ 	/* exactly one argument needed; -v and -q don't mix; -c NUM, -t NUM, -w NUM, -W NUM */
+ 	opt_complementary = "=1:q--v:v--q:c+:t+:w+:W+";
+-	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I);
++#ifdef ZCFG_SUPPORT_TR369//TR-369	
++	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_p, &str_s, &opt_ttl, &deadline, &timeout, &str_I);//TR-369 add str_p
++#else
++	opt |= getopt32(argv, OPT_STRING, &pingcount, &str_s, &opt_ttl, &deadline, &timeout, &str_I);
++#endif	
+ 	if (opt & OPT_s)
+ 		datalen = xatou16(str_s); // -s
+ 	if (opt & OPT_I) { // -I
+@@ -1232,6 +1270,11 @@
+ 			str_I = NULL; /* don't try to bind to device later */
+ 		}
+ 	}
++#ifdef ZCFG_SUPPORT_TR369//TR-369	
++	if (opt & OPT_p) { // -p
++		input_pid = xatou16(str_p);
++	}
++#endif	
+ 	if(timeout == 0){
+ 		timeout = 1;
+ 	}

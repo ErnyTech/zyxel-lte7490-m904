@@ -1,0 +1,82 @@
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2020-11-20 14:56:35.462935147 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2020-11-20 14:56:35.518936152 +0800
+@@ -656,6 +656,50 @@
+ }
+ 
+ #if defined(ZYXEL_BOARD_DETECT_BY_GPIO) || defined(CONFIG_BCM96856)
++#if defined(ZYXEL_BOARD_DETECT_BY_GPIO) && defined(ZYXEL_SUPPORT_RDPAWAN_CONFIGURE)
++int zyUtilISetScratchPadSetting(const char *key, const void *buf, int bufLen)
++{
++	char *currBuf;
++	int count;
++	int rc;
++
++	if ((currBuf = (char *)ZOS_MALLOC(bufLen+1)) == NULL)
++	{
++		return ZCFG_INTERNAL_ERROR;
++	}
++
++	/*
++	* Writing to the scratch pad is a non-preemptive time consuming
++	* operation that should be avoided.
++	* Check if the new data is the same as the old data.
++	*/
++	count = boardIoctl(BOARD_IOCTL_FLASH_READ, SCRATCH_PAD,
++	               (char *) key, 0, bufLen, currBuf);
++
++	if (count == bufLen)
++	{
++		if (memcmp(currBuf, buf, bufLen) == 0)
++		{
++			ZOS_FREE(currBuf);
++			/* set is exactly the same as the orig data, no set needed */
++			return ZCFG_SUCCESS;
++		}
++	}
++
++	if( currBuf != NULL )
++		ZOS_FREE(currBuf);
++
++	rc = boardIoctl(BOARD_IOCTL_FLASH_WRITE, SCRATCH_PAD, (char *) key, 0, bufLen, (char *) buf);
++				printf("%s %d: rc:%d\n", __FUNCTION__, __LINE__, rc);
++
++	if (rc < 0)
++	{
++		printf("Unable to write SCRATCH_PAD.\n");
++		return ZCFG_INTERNAL_ERROR;
++	}
++	return ZCFG_SUCCESS;
++}
++#endif
+ zcfgRet_t zyUtilIGetScratchPadSetting(char *psp_wantype, char *psp_wanrate)
+ {
+     int rc;
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-11-20 14:56:35.494935722 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-11-20 14:56:35.522936224 +0800
+@@ -5,6 +5,7 @@
+ #include <unistd.h>
+ #include <sys/syscall.h>
+ #include "zcfg_common.h"
++#include "zos_api.h"
+ 
+ #define zyutil_dbg_printf(_fmt_, ...) \
+     fprintf(stderr, "[PID %ld] %s line %d, %s(), " _fmt_, syscall(__NR_gettid), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+@@ -32,7 +33,14 @@
+ //Reference bcmdrivers/opensource/include/bcm963xx/board.h
+ #define ZYXEL_RDPA_WAN_TYPE_VALUE_XGS     "XGS"	//simulate RDPA_WAN_TYPE_VALUE_XGS
+ #define ZYXEL_RDPA_WAN_TYPE_VALUE_GBE     "GBE" //simulate RDPA_WAN_TYPE_VALUE_GBE
++
+ zcfgRet_t zyUtilIGetScratchPadSetting(char *psp_wantype, char *psp_wanrate);
++
++#if defined(ZYXEL_BOARD_DETECT_BY_GPIO) && defined(ZYXEL_SUPPORT_RDPAWAN_CONFIGURE)
++#define ZYXEL_CLI_READ_RDPA_WAN_INFO     "/tmp/rdpawaninfo" //temporary file for cli read.
++int zyUtilISetScratchPadSetting(const char *key, const void *buf, int bufLen);
++#endif
++
+ #endif
+ #endif
+ 

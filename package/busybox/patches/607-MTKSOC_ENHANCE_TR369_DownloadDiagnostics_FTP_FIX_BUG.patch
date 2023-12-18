@@ -1,0 +1,40 @@
+Index: busybox-1_20_1/networking/ftpgetput.c
+===================================================================
+--- busybox-1_20_1.orig/networking/ftpgetput.c	2021-08-19 17:37:18.389052000 +0800
++++ busybox-1_20_1/networking/ftpgetput.c		2021-08-19 17:37:25.469052000 +0800
+@@ -388,7 +388,11 @@
+ 	struct json_object *ulDiagObjParams = json_object_new_object();
+ 	json_object_object_add(ulDiagObjParams, "DiagnosticsState", json_object_new_string(ipDiagUlObj->DiagnosticsState));
+ 
+-	if(!strcmp(ipDiagUlObj->DiagnosticsState, "Completed")){
++	if(!strcmp(ipDiagUlObj->DiagnosticsState, "Completed")
++#ifdef ZCFG_SUPPORT_TR369
++	||	!strcmp(ipDiagUlObj->DiagnosticsState, "Complete")
++#endif
++			){
+ 		json_object_object_add(ulDiagObjParams, "ROMTime", json_object_new_string(ipDiagUlObj->ROMTime));
+ 		json_object_object_add(ulDiagObjParams, "BOMTime", json_object_new_string(ipDiagUlObj->BOMTime));
+ 		json_object_object_add(ulDiagObjParams, "EOMTime", json_object_new_string(ipDiagUlObj->EOMTime));
+@@ -531,7 +535,12 @@
+ 	char *dummy_data = NULL;
+ 	unsigned int send_data_size = 0, sent_data_size = 0;
+ 
++#if 0
+ 	if(!data_size || !from) {
++#else
++	// no need to set test data size in download diagnostics
++	if(!from) {
++#endif
+ 		rt = EXIT_FAILURE;
+ 		goto complete;
+ 	}
+@@ -697,7 +706,8 @@
+ 	}
+ 
+ #ifdef ZCFG_SUPPORT
+-	if(testSendLength) {
++	//if(testSendLength) { // no need test data size input in download mode
++	if(1) {
+ 		makeTimeStamp(ipDiagUlObj->ROMTime, sizeof(ipDiagUlObj->ROMTime));
+ 
+ 		if(setsockopt(fd_data, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0) {

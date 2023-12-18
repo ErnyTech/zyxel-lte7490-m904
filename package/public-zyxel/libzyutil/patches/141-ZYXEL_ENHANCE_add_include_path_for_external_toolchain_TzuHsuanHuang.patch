@@ -1,0 +1,25 @@
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2020-10-14 16:27:58.712992535 +0800
++++ libzyutil-1.0/Makefile	2020-10-14 16:33:22.216255636 +0800
+@@ -11,6 +11,10 @@
+ INC_PATH +=  -I. -I./$(ZCFG_PLATFORM)
+ INC_PATH += -I./libzyutil_encrypt
+ 
++ifneq ($(CONFIG_EXTERNAL_TOOLCHAIN),)
++INC_PATH += -idirafter$(STAGING_DIR)/usr/include
++endif
++
+ ifeq ($(ZCFG_PLATFORM),BROADCOM)
+ ZCFLAGS += -DBCMTAG_EXE_USE
+ 
+@@ -18,8 +22,7 @@
+                          -I$(INC_BRCMDRIVER_PRIV_PATH)/$(BRCM_BOARD) \
+                          -I$(INC_BRCMSHARED_PUB_PATH)/$(BRCM_BOARD) \
+                          -I$(BUILD_DIR)/shared/broadcom/include/$(BRCM_BOARD) \
+-                         -I$(BUILD_DIR)/shared/opensource/include/$(BRCM_BOARD) \
+-						 -idirafter$(STAGING_DIR)/usr/include
++                         -I$(BUILD_DIR)/shared/opensource/include/$(BRCM_BOARD)
+ 
+ INC_PATH += $(ALLOWED_INCLUDE_PATHS)
+ endif

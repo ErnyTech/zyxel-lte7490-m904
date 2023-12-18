@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Shutdown script for software reboot
+#
+
+# Kill RILCMD
+echo "Wait 6s to stop RILCMD...\n"
+killall rilcmd.sh
+sleep 6
+
+#
+#Manual reset LTE module before reboot system
+#
+echo "Reset LTE module..\n"
+if [ -c /dev/ttyUSB3 ] && [ ! -f /tmp/reset_lte_module ] ; then
+	echo "Sending detach.."
+	echo "AT+CGATT=0" >/dev/ttyUSB3
+	echo "AT" >/dev/ttyUSB3
+fi
+
+echo "Trigger HW reset..\n"
+/bin/zyledctl LTE_MOD_RST start >&-
+
+#sync disk cache
+sync;sync
+
+#unmount all 
+/bin/umount -a -r
+
+#End of rcD----end

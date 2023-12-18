@@ -1,0 +1,52 @@
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-05-05 15:29:56.183254000 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-05-05 15:29:56.231254000 +0800
+@@ -1117,4 +1117,17 @@
+ 	return MRD_KEYPASSPHRASE_LEN;
+ }
+ #endif
++
++
++#if defined(ZYXEL_BOARD_DETECT_BY_GPIO)
++/******* 
++   dummy function, 
++   prevent BRCM API compile failed in ECONET platform in esmd.c 
++********/
++zcfgRet_t zyUtilIGetScratchPadSetting(char *psp_wantype, char *psp_wanrate)
++{
++    return ZCFG_SUCCESS;
++}
++#endif //defined(ZYXEL_BOARD_DETECT_BY_GPIO)
++
+ #endif
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2020-05-05 15:29:55.963254000 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2020-05-05 15:29:56.231254000 +0800
+@@ -40,7 +40,10 @@
+ zcfgRet_t zyUtilGetBootImageHeader(void *booting_header);  //should conver to "struct trx_header"
+ zcfgRet_t zyUtilGetDualImageInfo(int bootFlag, char *fwversion);
+ zcfgRet_t zyUtilGetWlanReserveAreaOffset(char*, unsigned int*);
+-#endif
++#if defined(ZYXEL_BOARD_DETECT_BY_GPIO)
++zcfgRet_t zyUtilIGetScratchPadSetting(char *psp_wantype, char *psp_wanrate); //dummy API for compile issue in ECONET
++#endif //defined(ZYXEL_BOARD_DETECT_BY_GPIO)
++#endif //#ifdef ECONET_PLATFORM
+ 
+ #ifdef BROADCOM_PLATFORM
+ zcfgRet_t memaccess(int type, unsigned long addr, unsigned long *value);
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2020-05-05 15:29:56.211254000 +0800
++++ libzyutil-1.0/Makefile	2020-05-05 15:31:00.895254000 +0800
+@@ -124,7 +124,8 @@
+ LIB_OBJS = common.o flash.o skconn.o zyutil_cofw.o
+ LIB_OBJS += zyutil_sfp.o
+ 
+-ifneq ($(strip $(ZYXEL_FEATURE_BITS)),)
++# ZYXEL_FEATURE_BITS
++ifneq ($(findstring ZYXEL_FEATURE_BITS,$(EXTRA_CFLAGS)),)
+ LIB_OBJS += libzyutil_zyxelfeaturebits.o
+ endif
+ 

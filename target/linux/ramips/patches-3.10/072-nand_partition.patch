@@ -1,0 +1,71 @@
+Index: linux-3.10.14/drivers/mtd/ralink/ralink_nand.c
+===================================================================
+--- linux-3.10.14.orig/drivers/mtd/ralink/ralink_nand.c
++++ linux-3.10.14/drivers/mtd/ralink/ralink_nand.c
+@@ -161,9 +161,27 @@
+                 offset:         MTDPART_OFS_APPEND
+ 	}, {
+ 	        name:           "firmware",
+-	        size:           MTDPART_SIZ_FULL,
+-	        offset:         0x140000,
+-	}, 
++//	        size:           MTDPART_SIZ_FULL,
++		size:		0x2000000,
++	        offset:         MTDPART_OFS_APPEND
++	}, {
++                name:           "wwan",
++                size:           MTD_WWAN_PART_SIZE,
++                offset:         MTDPART_OFS_APPEND
++        }, {
++                name:           "data",
++                size:           MTD_DATA_PART_SIZE,
++                offset:         MTDPART_OFS_APPEND
++        }, {
++                name:           "rom-d",
++                size:           MTD_ROMD_PART_SIZE,
++                offset:         MTDPART_OFS_APPEND
++        }, {
++                name:           "reserve",
++                size:           MTD_RESERVE_PART_SIZE,
++                offset:         MTDPART_OFS_APPEND,
++	}
++
+ };
+ #else /* CONFIG_SUPPORT_OPENWRT */
+ static struct mtd_partition rt2880_partitions[] = {
+@@ -209,7 +227,8 @@
+ #ifdef CONFIG_DUAL_IMAGE
+         }, {
+                 name:           "Kernel2",
+-                size:           NAND_MTD_KERN2_PART_SIZE,
++//                size:           NAND_MTD_KERN2_PART_SIZE,	//this seems not defined in org code, use MTDKERN2, or define with dual image option...
++		size:           MTD_KERN2_PART_SIZE,	
+                 offset:         MTD_KERN2_PART_OFFSET,
+ #ifdef CONFIG_RT2880_ROOTFS_IN_FLASH
+         }, {
+@@ -224,7 +243,24 @@
+                 size:           MTD_CONFIG_PART_SIZE,
+                 offset:         MTD_CONFIG2_PART_OFFSET,
+ #endif
+-        }
++/*Add Zyxel partitions*/
++        }, {
++                name:           "wwan",
++                size:           MTD_WWAN_PART_SIZE,
++                offset:         MTD_WWAN_PART_OFFSET,
++        }, {
++                name:           "data",
++                size:           MTD_DATA_PART_SIZE,
++                offset:         MTD_DATA_PART_OFFSET,
++        }, {
++                name:           "rom-d",
++                size:           MTD_ROMD_PART_SIZE,
++                offset:         MTD_ROMD_PART_OFFSET,
++        }, {
++                name:           "reserve",
++                size:           MTD_RESERVE_PART_SIZE,
++                offset:         MTD_RESERVE_PART_OFFSET,
++	}
+ };
+ 
+ #endif /* CONFIG_SUPPORT_OPENWRT */

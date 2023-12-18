@@ -1,0 +1,133 @@
+Index: libzcfg_fe_rdm_struct-1.0/Makefile
+===================================================================
+--- libzcfg_fe_rdm_struct-1.0.orig/Makefile	2021-04-08 17:10:01.851522030 +0800
++++ libzcfg_fe_rdm_struct-1.0/Makefile	2021-04-08 17:11:04.745770413 +0800
+@@ -1,7 +1,7 @@
+ OBJS = zcfg_fe_rdm_struct.o
+ CURRENT_DIR = $(shell pwd)
+ LIB_PATH = -L$(USRLIBDIR)
+-LINK_LIBS = -ljson -lzcfg_msg -lzcfg_fe_rdm_access -lzcmd_tool
++LINK_LIBS = -ljson -lzcfg_msg -lzcfg_fe_rdm_access -lzcmd_tool -lzos
+ 
+ ifeq ($(CONFIG_ZYXEL_MEMORY_LEAK_DETECT),y)
+ CFLAGS += -DZCFG_MEMORY_LEAK_DETECT
+Index: libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.c
+===================================================================
+--- libzcfg_fe_rdm_struct-1.0.orig/zcfg_fe_rdm_struct.c	2021-04-08 17:10:01.851522030 +0800
++++ libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.c	2021-04-08 17:11:53.538841059 +0800
+@@ -4,6 +4,7 @@
+ #include "zcmd_schema.h"
+ #include "zcmd_tool.h"
+ #include "zcfg_msg.h"
++#include "zos_api.h"
+ 
+ extern void *schemaShmAddr;
+ 
+@@ -17,7 +18,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -34,7 +35,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -51,7 +52,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -68,7 +69,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -85,7 +86,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+     return ret;
+@@ -102,7 +103,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -119,7 +120,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+     return ret;
+@@ -136,7 +137,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+         return ret;
+@@ -160,7 +161,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -184,7 +185,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -208,7 +209,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;
+@@ -232,7 +233,7 @@
+ 	if(ret == ZCFG_SUCCESS) {
+ 		/*Translate json string to user request structure*/
+ 		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
+-		free(result);
++		ZOS_FREE(result);
+ 	}
+ 
+ 	return ret;

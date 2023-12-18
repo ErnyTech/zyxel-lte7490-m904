@@ -1,0 +1,46 @@
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_new/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-01-16 22:57:51.773614859 +0800
++++ mosquitto-1.6.7_new/client/pub_client.c	2020-01-16 23:01:59.374293000 +0800
+@@ -611,6 +611,23 @@
+ 		goto cleanup;
+ 	}
+ //printf("%s() 1111111111111111111\n", __FUNCTION__);
++#if 1//Jessie move to the beginning (here)
++	snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);
++	//unlink(pid_file);
++
++	pid = getpid();
++	printf("%s() pid=%d\n", __FUNCTION__, pid);
++	//snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);
++	fp = fopen(pid_file, "w+");
++	if(fp == NULL){
++		goto cleanup;
++	}
++	printf("%s() after write pid to /tmp/mosquitto_pub_x.pid\n", __FUNCTION__);
++	fprintf(fp, "%d", pid);
++	fclose(fp);
++	fp = NULL;
++#endif
++
+ #ifndef WITH_THREADING
+ 	if(cfg.pub_mode == MSGMODE_STDIN_LINE){
+ 		fprintf(stderr, "Error: '-l' mode not available, threading support has not been compiled in.\n");
+@@ -700,18 +717,6 @@
+ 		goto cleanup;
+ 	}
+ 
+-
+-	pid = getpid();//Jessie
+-	//printf("%s() Jessie pid=%d\n", __FUNCTION__, pid);//Jessie
+-	snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);//Jessie
+-	fp = fopen(pid_file, "w+");
+-	if(fp == NULL){
+-		goto cleanup;
+-	}
+-	fprintf(fp, "%d", pid);
+-	fclose(fp);
+-	fp = NULL;
+-
+ 	rc = pub_shared_loop(mosq);
+ 
+ //#ifndef ZYXEL_MQTT_PUBLISHER

@@ -1,0 +1,15 @@
+diff -urN wide-dhcpv6-20080615_org/common.c wide-dhcpv6-20080615/common.c
+--- wide-dhcpv6-20080615_org/common.c	2019-10-02 13:47:21.516537608 +0800
++++ wide-dhcpv6-20080615/common.c	2019-10-02 13:47:51.347423328 +0800
+@@ -778,6 +778,11 @@
+ 	for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+ 		int s1, s2;
+ 
++		// Jessie Lu@2019.09.27: [BugFix] fixed the Segmentation fault of dhcp6relay daemon.
++		if (ifa->ifa_addr == NULL) {
++			continue;
++		}
++
+ 		if (strong && strcmp(ifnam, ifa->ifa_name) != 0)
+ 			continue;
+ 

@@ -1,0 +1,14 @@
+config dnsmasq_release
+    string
+    prompt "specify dnsmasq release version" if PACKAGE_dnsmasq
+    default "2.67"
+
+config dnsmasq_dnssec
+    bool
+    prompt "enable/disable dnsmasq dnssec" if PACKAGE_dnsmasq
+    default 0
+
+config dnsmasq_add_client_id_on_the_same_mac
+    bool
+    prompt "enable/disable dnsmasq client id" if PACKAGE_dnsmasq
+    default 0

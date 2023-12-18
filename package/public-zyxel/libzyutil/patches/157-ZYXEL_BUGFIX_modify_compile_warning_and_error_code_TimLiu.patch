@@ -1,0 +1,971 @@
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2021-01-28 02:18:35.639932367 +0800
++++ libzyutil-1.0/common.c	2021-01-28 02:18:35.663920367 +0800
+@@ -8,8 +8,8 @@
+ #include <stdio.h>
+ #include <time.h>
+ 
+-#ifdef ABOG_CUSTOMIZATION
+ #include <sys/stat.h>
++#ifdef ABOG_CUSTOMIZATION
+ #include <stdlib.h>
+ #include <dirent.h>
+ #endif
+@@ -62,11 +62,11 @@
+ 	strcpy(hwaddr, "");
+ 
+ 	sprintf(sysCmd, "ifconfig %s > /var/hwaddr ", ifname);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 
+ 	fp = fopen("/var/hwaddr", "r");
+ 	if(fp != NULL) {
+-		if (fgets(buf, sizeof(buf), fp)) {
++		if (fgets(buf, sizeof(buf), fp) != NULL) {
+ 			for(i = 2; i < (int)(sizeof(buf) - 5); i++) {
+ 				if (buf[i]==':' && buf[i+3]==':') {
+ 					p = buf+(i-2);
+@@ -98,7 +98,7 @@
+ 		return false;
+ 
+ 	sprintf(sysCmd, "ps | grep %s | grep -v grep > /tmp/app", appName);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 
+ 	fp = fopen("/tmp/app", "r");
+ 	if(fp != NULL) {
+@@ -155,23 +155,23 @@
+ 	if(ifName == NULL || ifName[0] == 0) return;
+ 	if(bridgeName == NULL || bridgeName[0] == 0) return;
+ 	//sprintf(sysCmd, "brctl delif %s %s 2>/dev/null", bridgeName, ifName);
+-	//system(sysCmd);
++	//ZOS_SYSTEM(sysCmd);
+ 	sprintf(sysCmd, "ifconfig %s 0.0.0.0 2>/dev/null", ifName);
+-	if(system(sysCmd) == 0){
++	if(ZOS_SYSTEM(sysCmd) == ZOS_SUCCESS){
+ 		sprintf(sysCmd, "ifconfig %s up", ifName);
+-		system(sysCmd);
++		ZOS_SYSTEM(sysCmd);
+ 		sprintf(sysCmd, "brctl addif %s %s", bridgeName, ifName);
+-		system(sysCmd);
++		ZOS_SYSTEM(sysCmd);
+ 		sprintf(sysCmd, "sendarp -s %s -d %s", bridgeName, bridgeName);
+-		system(sysCmd);
++		ZOS_SYSTEM(sysCmd);
+ 		sprintf(sysCmd, "sendarp -s %s -d %s", bridgeName, ifName);
+-		system(sysCmd);
++		ZOS_SYSTEM(sysCmd);
+ #if defined (ZYXEL_VMG8924_B10D_TISCALI_ISOLATE_DMZ)
+-		system("kill $(ps | grep \"/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh\" | awk 'FNR==1' | awk '{print $1}')");
+-		system("/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh remap &"); // check dmz port and isolate dmz port
++		ZOS_SYSTEM("kill $(ps | grep \"/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh\" | awk 'FNR==1' | awk '{print $1}')");
++		ZOS_SYSTEM("/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh remap &"); // check dmz port and isolate dmz port
+ #elif defined (ZYXEL_VMG8825_T50K_TISCALI_ISOLATE_DMZ)
+-		system("kill $(ps | grep \"/etc/isolateDMZ_VMG8825_T50K.sh\" | awk 'FNR==1' | awk '{print $1}')");
+-		system("/etc/isolateDMZ_VMG8825_T50K.sh &");
++		ZOS_SYSTEM("kill $(ps | grep \"/etc/isolateDMZ_VMG8825_T50K.sh\" | awk 'FNR==1' | awk '{print $1}')");
++		ZOS_SYSTEM("/etc/isolateDMZ_VMG8825_T50K.sh &");
+ #endif
+ 	}
+ }
+@@ -181,17 +181,17 @@
+ 	char sysCmd[64] = {0};
+ 
+ 	sprintf(sysCmd, "brctl delif %s %s", bridgeName, ifName);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 	sprintf(sysCmd, "sendarp -s %s -d %s", bridgeName, bridgeName);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 	sprintf(sysCmd, "sendarp -s %s -d %s", bridgeName, ifName);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ #if defined (ZYXEL_VMG8924_B10D_TISCALI_ISOLATE_DMZ)
+-	system("kill $(ps | grep \"/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh\" | awk 'FNR==1' | awk '{print $1}')");
+-	system("/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh remap &"); // check dmz port and isolate dmz port
++	ZOS_SYSTEM("kill $(ps | grep \"/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh\" | awk 'FNR==1' | awk '{print $1}')");
++	ZOS_SYSTEM("/etc/isolateDMZ_Wind_Italy_VMG8924_b10d.sh remap &"); // check dmz port and isolate dmz port
+ #elif defined (ZYXEL_VMG8825_T50K_TISCALI_ISOLATE_DMZ)
+-	system("kill $(ps | grep \"/etc/isolateDMZ_VMG8825_T50K.sh\" | awk 'FNR==1' | awk '{print $1}')");
+-	system("/etc/isolateDMZ_VMG8825_T50K.sh &");
++	ZOS_SYSTEM("kill $(ps | grep \"/etc/isolateDMZ_VMG8825_T50K.sh\" | awk 'FNR==1' | awk '{print $1}')");
++	ZOS_SYSTEM("/etc/isolateDMZ_VMG8825_T50K.sh &");
+ #endif
+ }
+ 
+@@ -278,7 +278,7 @@
+ 
+ bool zyUtilRetrieveSystemDefaultRoutIface(char *interfaceName)
+ {
+-	system("echo > /var/tr143NullInterface");//If interface is null
++	ZOS_SYSTEM("echo > /var/tr143NullInterface");//If interface is null
+ 	FILE *fp = NULL;
+ 	char defaultGateway[256] = {0};
+ 
+@@ -338,11 +338,12 @@
+ 	zcfgLog(ZCFG_LOG_DEBUG, "%s : Enter\n", __FUNCTION__);
+ 
+ 	if((fptr = fopen(pidFile, "r")) != NULL) {
+-		fscanf(fptr, "%d", &pid);
++		if ( fscanf(fptr, "%d", &pid) != 1)
++			printf("%s : fail to get the content from file!\n", __FUNCTION__);
+ 		printf("%s : Stop process with PID %d\n", __FUNCTION__, pid);
+ 		snprintf(sysCmd, sizeof(sysCmd), "kill -9 %d", pid);
+ 		zcfgLog(ZCFG_LOG_DEBUG, "Command %s\n", sysCmd);
+-		if(system(sysCmd) != 0)
++		if(ZOS_SYSTEM(sysCmd) != ZOS_SUCCESS)
+ 			ret = ZCFG_INTERNAL_ERROR;
+ 		fclose(fptr);
+ 	}
+@@ -364,7 +365,8 @@
+ 	    return ret;
+ 	}
+ 
+-	fscanf(fptr, "%d", &pid);
++	if ( fscanf(fptr, "%d", &pid) != 1 )
++		ZLOG_WARNING("fail to get the content from file!\n");
+ 	fclose(fptr);
+ 
+ #if 1 //SUNRISE_RELEASE_DHCP_PPP_BEFORE_IFDOWN
+@@ -541,7 +543,7 @@
+ void zyUtilBackslashInForEcho(char *str)
+ {
+ 	char tmpStr[513] = {};
+-	int i = 0, j = 0, sym = 0;
++	int i = 0, j = 0;
+ 
+ 	for (i=0; i<strlen(str); i++) {
+ 		if ((*(str+i) == 34 ) || (*(str+i) == 36) || (*(str+i) == 92) || (*(str+i) == 96)){
+@@ -796,7 +798,8 @@
+ 	char *token, *tmp = NULL;
+ 	char *p = NULL;
+ 	int cmp;
+-	token = strtok_r(csvStr, ",", &tmp);
++	char *_csvStr_local = strdup(csvStr); //prevent strtok_r modify the original string.
++	token = strtok_r(_csvStr_local, ",", &tmp);
+ 	int running = token ? 1 : 0;
+ 
+ 	while(running) {
+@@ -808,6 +811,7 @@
+ 		running = (!token || !cmp) ? 0 : 1;
+ 	}
+ 
++	if(_csvStr_local)ZOS_FREE(_csvStr_local);
+ 	return p;
+ }
+ 
+@@ -815,19 +819,20 @@
+ {
+ 	char *token, *tmp = NULL;
+ 	char *p = NULL;
+-	int cmp;
+ 	int csvStrLength = 0;
+ 	char *stripCsvStr = NULL, *outputCsvStr;
+ 	bool strip = false;
++	char *_csvStr_local = NULL;
+ 
+ 	if(!csvStr || !string || (csvStrLength = strlen(csvStr)) == 0 || strlen(string) == 0)
+ 		return NULL;
+ 
++	_csvStr_local = strdup(csvStr); //prevent strtok_r modify the original string.
+ 	stripCsvStr = malloc(csvStrLength+1);
+ 	memset(stripCsvStr, 0, csvStrLength+1);
+ 	outputCsvStr = NULL;
+ 
+-	token = strtok_r(csvStr, ",", &tmp);
++	token = strtok_r(_csvStr_local, ",", &tmp);
+ 	int running = token ? 1 : 0;
+ 
+ 	while(running) {
+@@ -847,6 +852,7 @@
+ 		free(stripCsvStr);
+ 	}
+ 
++	if(_csvStr_local)ZOS_FREE(_csvStr_local);
+ 	return strip ? stripCsvStr : NULL;
+ }
+ 
+@@ -949,7 +955,7 @@
+ 
+ 	in_addr_t addr2 = inet_addr(ipaddr2);
+ 
+-	if(addr1 < 0 || mask < 0 || addr2 < 0)
++	if( (addr1 == INADDR_NONE) || (mask == INADDR_NONE) || (addr2 == INADDR_NONE) )
+ 		return -1;
+ 
+ 	return ((addr1 & mask) == (addr2 & mask)) ? 0 : 1;
+@@ -1103,7 +1109,6 @@
+ 	struct json_object *value = NULL;
+ 	char sysCmd[2084] = {0};
+ 	char *bodypath = "/tmp/mailbody";
+-	const char *eventType = NULL;
+ 	time_t time_stamp = time(NULL);
+ 	struct tm *tPtr = localtime(&time_stamp);
+ 	const char *filepath = NULL;
+@@ -1152,7 +1157,7 @@
+ 			continue;
+ 		}
+ 		sprintf(sysCmd, "sed -i \"s/\\#{%s}/%s/g\" %s", keys, json_object_get_string(val), bodypath);
+-		system(sysCmd);
++		ZOS_SYSTEM(sysCmd);
+ 		memset(sysCmd, 0, sizeof(sysCmd));
+ 	}
+ 
+@@ -1184,12 +1189,15 @@
+ 		fp = popen("cat /tmp/mailbody", "r");
+ 		if(fp != NULL)
+ 		{
+-			fgets(buff, sizeof(buff), fp);
+-			/* mailsend can choose option between -attach file or -mime-type.
+-			* It can attach multi files, but if it need mail body, use option -M only
+-			* And now mailsend can only attach one text file */
+-			sprintf(attachCmd, " -attach \"%s,text/plain\" -M \"%s\"", filepath, buff);
+-			strcat(sysCmd, attachCmd);
++			if ( fgets(buff, sizeof(buff), fp) != NULL)
++			{
++				/* mailsend can choose option between -attach file or -mime-type.
++				* It can attach multi files, but if it need mail body, use option -M only
++				* And now mailsend can only attach one text file */
++				sprintf(attachCmd, " -attach \"%s,text/plain\" -M \"%s\"", filepath, buff);
++				strcat(sysCmd, attachCmd);
++			} else
++				zcfgLog(ZCFG_LOG_ERR, "%s fail to get content from file!\n", __FUNCTION__);
+ 			fclose(fp);
+ 			fp = NULL;
+ 		}
+@@ -1202,7 +1210,7 @@
+ 
+ 	printf("Sending Email...\n");
+ 	//printf("%s\n", sysCmd);
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 
+ 	chmod("/tmp/mailLog", strtol("0777", 0, 8));
+ 	if ((fp = fopen("/tmp/mailLog", "r")) == NULL) {
+@@ -1239,8 +1247,8 @@
+ 
+ bool zyUtilFileExists(const char * filename)
+ {
+-	FILE *file = NULL;
+-	if (file = fopen(filename, "r"))
++	FILE *file = fopen(filename, "r");
++	if ( file != NULL )
+ 	{
+ 		fclose(file);
+ 		return true;
+@@ -1366,12 +1374,12 @@
+ 			fp = NULL;
+ 		}
+ 		sprintf(cmd, "%s --noflush %s", IPTABLESRESTORE, fileName);
+-		ret = system(cmd);
+-		if(ret != 0){
++		ret = ZOS_SYSTEM(cmd);
++		if(ret != ZOS_SUCCESS){
+ 			zcfgLog(ZCFG_LOG_ERR, "%s fail, ret = %d, called from %s, %s():%d\n", IPTABLESRESTORE, ret, file, func, line);
+ 			printf("%s fail, ret = %d, called from %s, %s():%d\n", IPTABLESRESTORE, ret, file, func, line);
+ 			sprintf(cmd, "cat %s", fileName);
+-			system(cmd);
++			ZOS_SYSTEM(cmd);
+ 		}
+ 
+ 		unlink(fileName);
+@@ -1398,12 +1406,12 @@
+ 			fp = NULL;
+ 		}
+ 		sprintf(cmd, "%s --noflush %s", IP6TABLESRESTORE, fileName);
+-		ret = system(cmd);
+-		if(ret != 0){
++		ret = ZOS_SYSTEM(cmd);
++		if(ret != ZOS_SUCCESS){
+ 			zcfgLog(ZCFG_LOG_ERR, "%s fail, ret = %d, called from %s, %s():%d\n",IP6TABLESRESTORE, ret, file, func, line);
+ 			printf("%s fail, ret = %d, called from %s, %s():%d\n", IP6TABLESRESTORE, ret, file, func, line);
+ 			sprintf(cmd, "cat %s", fileName);
+-			system(cmd);
++			ZOS_SYSTEM(cmd);
+ 		}
+ 
+ 		unlink(fileName);
+@@ -1429,7 +1437,8 @@
+ 	char accInfo[512] = {0};
+ 	char accFile[32] = {0};
+ 	char syscmd[512];
+-	int fd, r, ret=-1;
++	int fd, ret=-1;
++	ssize_t r;
+ 
+ #ifndef SHA512_PASSWD
+ 	return 1;
+@@ -1446,7 +1455,12 @@
+ 	}
+ 
+ 	sprintf(syscmd, "%s\r\n%s\r\n", username, password);
+-	write(fd, syscmd, strlen(syscmd));
++	if( write(fd, syscmd, strlen(syscmd)) == -1 )
++	{
++		printf("%s.%d: cant not write file! \n", __func__, __LINE__);
++		close(fd);
++		return -3;
++	}
+ 	close(fd);
+ 
+ 	sprintf(syscmd, "login -z %s", accFile);
+@@ -1462,6 +1476,8 @@
+ 	}
+ 
+ 	r = read(fd, &accInfo[0], 512);
++	if ( r == -1)
++		printf("%s.%d: fail to read out the content form file! \n", __func__, __LINE__);
+ 	close(fd);
+ 
+ 	sscanf(&accInfo[0], "result:%d", &ret);
+@@ -1532,7 +1548,7 @@
+ 
+     while (fgets(strBuff, sizeof(strBuff), fp) != NULL)
+     {
+-        if (strncmp(username, strBuff, sizeof(username)) != 0)
++        if (strncmp(username, strBuff, strlen(username)) != 0)
+         {
+             fputs(strBuff, tmpFp);
+         }
+@@ -1543,9 +1559,9 @@
+     fclose(fp);
+ 
+     sprintf(strBuff, "mv %s %s", tmpFilePath, filePath);
+-    system(strBuff);
++    ZOS_SYSTEM(strBuff);
+     sprintf(strBuff, "chmod 644 %s", filePath);
+-    system(strBuff);
++    ZOS_SYSTEM(strBuff);
+ 
+     ZOS_FREE(tmpFilePath);
+ }
+@@ -1628,7 +1644,7 @@
+ 	if (addr)
+ 		addr[0] = ':';
+ 
+-	if (!system(cmd))
++	if ( ZOS_SYSTEM(cmd) == ZOS_FAIL )
+ 		return;
+ 
+ 	DIR* dir = opendir(REMOTE_MANAGEMENT_FILE_FOLDER);
+@@ -1640,13 +1656,13 @@
+ 	else
+ 	{
+ 		sprintf(cmd, "mkdir %s", REMOTE_MANAGEMENT_FILE_FOLDER);
+-		system(cmd);
++		ZOS_SYSTEM(cmd);
+ 	}
+ 	sprintf(cmd, "touch %s%d", REMOTE_MANAGEMENT_FILE_FOLDER, pid);
+-	system(cmd);
++	ZOS_SYSTEM(cmd);
+ 
+-	system("echo 0 > /proc/tc3162/led_pwr_green");
+-	system("echo 1 > /proc/tc3162/led_pwr_green");
++	ZOS_SYSTEM("echo 0 > /proc/tc3162/led_pwr_green");
++	ZOS_SYSTEM("echo 1 > /proc/tc3162/led_pwr_green");
+ }
+ 
+ static int zyCountFilesInRemoteManageFolder(void)
+@@ -1688,12 +1704,12 @@
+ 	}
+ 
+ 	sprintf(cmd, "rm %s%d &>/dev/null", REMOTE_MANAGEMENT_FILE_FOLDER, pid);
+-	system(cmd);
++	ZOS_SYSTEM(cmd);
+ 
+ 	if (zyCountFilesInRemoteManageFolder() == 0)
+ 	{
+-		system("echo 0 > /proc/tc3162/led_pwr_green");
+-		system("echo 2 > /proc/tc3162/led_pwr_green");
++		ZOS_SYSTEM("echo 0 > /proc/tc3162/led_pwr_green");
++		ZOS_SYSTEM("echo 2 > /proc/tc3162/led_pwr_green");
+ 	}
+ }
+ #endif
+@@ -1904,7 +1920,8 @@
+ 	    return 0;
+ 	}
+ 
+-	fscanf(fptr, "%d", &pid);
++	if ( fscanf(fptr, "%d", &pid) != 1)
++		ZLOG_WARNING("fail to get the content from file!");
+ 	fclose(fptr);
+ 
+ 	return pid;
+Index: libzyutil-1.0/flash.c
+===================================================================
+--- libzyutil-1.0.orig/flash.c	2021-01-28 02:18:35.456024367 +0800
++++ libzyutil-1.0/flash.c	2021-01-28 02:18:35.667918367 +0800
+@@ -12,6 +12,7 @@
+ #include <mtd/mtd-user.h>
+ #include <errno.h>
+ #include "zcfg_system.h"
++#include "zos_api.h"
+ 
+ //#define ENABLE_DEBUG
+ #ifdef ENABLE_DEBUG
+@@ -31,10 +32,6 @@
+ #define BUFSIZE (64 * 1024)
+ #define mtd_FILE_X       "/tmp/mtd-XXXXXX" // I-Chia 20191112
+ 
+-static struct nand_oobinfo none_oobinfo = {
+-	.useecc = MTD_NANDECC_OFF,
+-};
+-
+ static int zyUtilOpen(const char *pathname, int flags)
+ {
+ 	int fd;
+@@ -56,25 +53,6 @@
+ 	return fd;
+ }
+ 
+-static int zyUtilRead(int fd, const char *filename, void *buf, size_t count)
+-{
+-	ssize_t result;
+-
+-	result = read(fd, buf, count);
+-
+-	if (count != result) {
+-		if (result < 0) {
+-			printf("While reading data from %s: %m\n", filename);
+-			return -1;
+-		}
+-
+-		printf("Short read count returned while reading from %s\n", filename);
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+ zcfgRet_t zyUtilMtdDevGetByName(char *mtdname, char *mtddev)
+ {
+ 	zcfgRet_t ret = ZCFG_NOT_FOUND;
+@@ -91,6 +69,7 @@
+ 	if ((fd_template = mkstemp(template)) < 0 )
+ 	{
+ 		printf("%s: Can't create MRD file!\n",__FUNCTION__);
++		return ZCFG_INTERNAL_ERROR;
+ 	}
+ 	sprintf(tmp_cat,"cat /proc/mtd > %s",template);
+ #endif
+@@ -109,19 +88,25 @@
+ 	}
+ 	else
+ 	{
+-		system(tmp_cat);
++		ZOS_SYSTEM(tmp_cat);
+ 	}
+ #endif
+ 
+ 	fp_template = fdopen(fd_template, "r");
+ 	sprintf(tmpname, "\"%s\"", mtdname);
+ 
+-	fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name);
++	if ( fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name) != 4 )
++	{
++		printf("%s: Can't read out the data from file!\n",__FUNCTION__);
++		return ZCFG_INTERNAL_ERROR;
++	}
++
+ 	while(!feof(fp_template))
+ 	{
+ 		if(strstr(mtd, "dev") != NULL)
+ 		{ //skip first line
+-			fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name);
++			if (fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name) != 4 )
++				printf("%s: Didnot read out the data from file!\n",__FUNCTION__);
+ 			continue;
+ 		}
+ 
+@@ -134,7 +119,8 @@
+ 			ret = ZCFG_SUCCESS;
+ 			break;
+ 		}
+-		fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name);
++		if (fscanf(fp_template, "%s%s%s%s", mtd, size, erasesize, name) != 4 )
++			printf("%s: Didnot read out the data from file!\n",__FUNCTION__);
+ 	}
+ 
+ 		fclose(fp_template);
+@@ -284,6 +270,10 @@
+         {
+             ZLOG_DEBUG("[%s_%d] Skip this block.\n", __FILE__, __LINE__);
+             cur_ofs = lseek(devFd, erase.length, SEEK_CUR);
++            if (cur_ofs == (off_t)-1)
++            {
++                ZLOG_ERROR("[%s_%d]do lseek fail!\n", __FILE__, __LINE__);
++            }
+             DEBUG_PRINT("[%s_%d] Shift pointer to ofs 0x%08x.\n", __FILE__, __LINE__, (unsigned int)cur_ofs);
+             bad_blk_count++;
+             continue;
+@@ -399,6 +389,26 @@
+     return ZCFG_SUCCESS;
+ }
+ #else
++
++static int zyUtilRead(int fd, const char *filename, void *buf, size_t count)
++{
++	ssize_t result;
++
++	result = read(fd, buf, count);
++
++	if (count != result) {
++		if (result < 0) {
++			printf("While reading data from %s: %m\n", filename);
++			return -1;
++		}
++
++		printf("Short read count returned while reading from %s\n", filename);
++		return -1;
++	}
++
++	return 0;
++}
++
+ zcfgRet_t zyUtilWriteBufToFlash(char *devName, void *buf, uint32_t buf_size)
+ {
+ 	int devFd = -1, i = 0;
+@@ -502,6 +512,11 @@
+ #endif
+ 
+ #ifndef NEW_MTD_DRIVER 
++
++static struct nand_oobinfo none_oobinfo = {
++	.useecc = MTD_NANDECC_OFF,
++};
++
+ int zyUtilReadBufFromFlash(char *devName, void *buf, uint32_t buf_size)
+ {
+ 	int oobinfochanged = 0;
+@@ -646,7 +661,7 @@
+ 	unsigned long long blockstart = 1;
+ 	int devFd = -1;
+ 	struct mtd_info_user mtd;
+-	int ret, pagesize, badblock = 0;
++	int pagesize, badblock = 0;
+ 	unsigned char readbuf[4096];
+ 
+ 	/* Open MTD device */
+@@ -898,14 +913,14 @@
+ 	}
+ 	else{
+ 		/*sprintf(cmd_buf, "rm -rf %s", RUN_WWANPACKAGE_FILE);
+-		system(cmd_buf);*/
++		ZOS_SYSTEM(cmd_buf);*/
+ 		unlink(RUN_WWANPACKAGE_FILE);
+ 		if (strcmp(flashPkgRevision, fwPkgRevision) > 0){
+ #if 1
+ 			//printf("%s: USE Flash WWAN Package\n", __func__); //debug
+ 			bufPoint = strstr(flashwwan, "END");
+ 			length = (bufPoint - flashwwan);
+-		    fd = open(RUN_WWANPACKAGE_FILE, O_WRONLY|O_TRUNC|O_CREAT);
++		    fd = open(RUN_WWANPACKAGE_FILE, O_WRONLY|O_TRUNC|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+ 			if(fd < 0){
+ 				printf("Error: %s, open file fail!\n", __func__);
+ 				unlink(RUN_WWANPACKAGE_FILE);
+@@ -921,13 +936,13 @@
+ 			//free(flashwwan);
+ #else
+ 			sprintf(cmd_buf, "cp %s %s", TMP_WWANPACKAGE_FILE, RUN_WWANPACKAGE_FILE);
+-			system(cmd_buf);
++			ZOS_SYSTEM(cmd_buf);
+ #endif
+ 		}
+ 		else{
+ 			//printf("%s: USE FW WWAN Package\n", __func__); //debug
+ 			sprintf(cmd_buf, "cp %s %s", FW_WWANPACKAGE_FILE, RUN_WWANPACKAGE_FILE);
+-			//system(cmd_buf);
++			//ZOS_SYSTEM(cmd_buf);
+ 			fp = popen(cmd_buf, "r");
+ 			if(fp == NULL){
+ 				printf("copy fw_wwanpackage fail\n");
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2021-01-28 02:18:35.655924368 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2021-01-28 02:18:35.667918367 +0800
+@@ -7,7 +7,7 @@
+ #include "board.h"
+ #include "bcm_hwdefs.h"
+ #include "bcmTag.h"
+-
++#include "zos_api.h"
+ 
+ 
+ #define BOARD_DEVICE_NAME  "/dev/brcmboard"
+@@ -47,14 +47,14 @@
+     }
+     //printf(" #### zyGetSupervisorPWD #### - nvramData.supervisor = %s\n", nvramData.supervisor);
+     //printf(" #### zyGetSupervisorPWD #### - nvramData.supervisor len = %d\n", strlen(nvramData.supervisor));
+-    _string_len = strlen(nvramData.supervisor);
++    _string_len = strlen((char *)nvramData.supervisor);
+     if(_string_len>NVRAM_SUPER_PWD_LEN)
+         _string_len = NVRAM_SUPER_PWD_LEN;
+ 
+     if ( _string_len == 0){
+         //printf(" #### zyGetSupervisorPWD #### - Failed - zyGetSupervisorPWD Empty\n");
+         return ZCFG_INTERNAL_ERROR;
+-    }else if( zyUtilIsPrintableString(nvramData.supervisor, _string_len) != 0 ){
++    }else if( zyUtilIsPrintableString((char *)nvramData.supervisor, _string_len) != 0 ){
+         //printf(" #### zyGetSupervisorPWD #### - Failed - zyGetSupervisorPWD is not printable string\n");
+         return ZCFG_INTERNAL_ERROR;
+     }
+@@ -87,14 +87,14 @@
+     }
+     //printf(" #### zyGetAdminPWD #### - nvramData.admin = %s\n", nvramData.admin);
+     //printf(" #### zyGetAdminPWD #### - nvramData.admin len = %d\n", strlen(nvramData.admin));
+-    _string_len = strlen(nvramData.admin);
++    _string_len = strlen((char *)nvramData.admin);
+     if(_string_len>NVRAM_ADMIN_PWD_LEN)
+         _string_len = NVRAM_ADMIN_PWD_LEN;
+ 
+     if ( _string_len == 0){
+         //printf(" #### zyGetAdminPWD #### - Failed - zyGetAdminPWD Empty\n");
+         return ZCFG_INTERNAL_ERROR;
+-    }else if( zyUtilIsPrintableString(nvramData.admin, _string_len) != 0 ){
++    }else if( zyUtilIsPrintableString((char *)nvramData.admin, _string_len) != 0 ){
+         //printf(" #### zyGetAdminPWD #### - Failed - zyGetAdminPWD is not printable string\n");
+         return ZCFG_INTERNAL_ERROR;
+     }
+@@ -126,14 +126,14 @@
+     }
+     //printf(" #### zyGetPSK #### - nvramData.WpaPskKey = %s\n", nvramData.WpaPskKey);
+     //printf(" #### zyGetPSK #### - nvramData.WpaPskKey len = %d\n", strlen(nvramData.WpaPskKey));
+-    _string_len = strlen(nvramData.WpaPskKey);
++    _string_len = strlen((char *)nvramData.WpaPskKey);
+     if(_string_len>NVRAM_KEYPASSPHRASE_LEN)
+         _string_len = NVRAM_KEYPASSPHRASE_LEN;
+ 
+     if ( _string_len == 0){
+         //printf(" #### zyGetPSK #### - Failed - zyGetPSK Empty\n");
+         return ZCFG_INTERNAL_ERROR;
+-    }else if( zyUtilIsPrintableString(nvramData.WpaPskKey, _string_len) != 0 ){
++    }else if( zyUtilIsPrintableString((char *)nvramData.WpaPskKey, _string_len) != 0 ){
+         //printf(" #### zyGetPSK #### - Failed - zyGetPSK is not printable string\n");
+         return ZCFG_INTERNAL_ERROR;
+     }
+@@ -215,7 +215,7 @@
+ 	boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+ 
+ 	if(boardFd != -1) {
+-		ioctlParms.string = nvramData;
++		ioctlParms.string = (char *)nvramData;
+ 		ioctlParms.strLen = sizeof(NVRAM_DATA);
+ 		ioctlParms.offset = offset;
+ 		ioctlParms.action = NVRAM;
+@@ -247,7 +247,7 @@
+ 	boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+ 
+ 	if(boardFd != -1) {
+-		ioctlParms.string = nvramData;
++		ioctlParms.string = (char *)nvramData;
+ 		ioctlParms.strLen = sizeof(NVRAM_DATA);
+ 		ioctlParms.offset = offset;
+ 		ioctlParms.action = NVRAM;
+@@ -279,7 +279,7 @@
+ 	boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+ 
+ 	if(boardFd != -1) {
+-		ioctlParms.string = zyFwInfo;
++		ioctlParms.string = (char *)zyFwInfo;
+ 		ioctlParms.strLen = sizeof(ZY_FW_INFO);
+ 		ioctlParms.offset = offset;
+ 		ioctlParms.action = 0;
+@@ -312,7 +312,7 @@
+ 	boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+ 
+ 	if(boardFd != -1) {
+-		ioctlParms.string = zyFwInfo;
++		ioctlParms.string = (char *)zyFwInfo;
+ 		ioctlParms.strLen = sizeof(ZY_FW_INFO);
+ 		ioctlParms.offset = offset;
+ 		ioctlParms.action = 0;
+@@ -568,7 +568,7 @@
+ 
+ 
+ 	sprintf(sysCmd, "xdslctl --version 2>&1 | tee /var/DSLversion");
+-	system(sysCmd);
++	ZOS_SYSTEM(sysCmd);
+ 
+ 	fp = fopen("/var/DSLversion", "r");
+ 	if(fp != NULL){
+@@ -838,21 +838,6 @@
+     return pLedInfo[index].zy_LedName;
+ }
+ 
+-int zyLedSet(char *name, int action) //for userspace (LED control)
+-{
+-    PZY_LEDCTL_INFO_COMMON pLedInfo;
+-    for(pLedInfo = zyLedctlInfo_common; (pLedInfo->index != ZY_MAX_LED); pLedInfo++)
+-    {
+-        if( !strcmp(name, pLedInfo->zy_LedName))
+-        {
+-            led_control(pLedInfo->index, action);
+-            return 1;
+-        }
+-    }
+-    printf("led_set ERROR");
+-    return 0;
+-}
+-
+ int boardIoctl_LED(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf, int result)
+ {
+     BOARD_IOCTL_PARMS IoctlParms;
+@@ -935,12 +920,12 @@
+                 if(action == ZY_LED_DOWN)
+                 {
+                     printf("wl0 LED DOWN\n");
+-                    system("/etc/init.d/zywifid_led.sh disable wl0");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh disable wl0");
+                 }
+                 else
+                 {
+                     printf("wl0 LED UP\n");
+-                    system("/etc/init.d/zywifid_led.sh enable wl0");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh enable wl0");
+                 }
+             }
+             else if (pLedInfo->ledType == ZY_WLAN1 || pLedInfo->ledType == ZY_HW_WLAN1)
+@@ -948,12 +933,12 @@
+                 if(action == ZY_LED_DOWN)
+                 {
+                     printf("wl1 LED DOWN\n");
+-                    system("/etc/init.d/zywifid_led.sh disable wl1");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh disable wl1");
+                 }
+                 else
+                 {
+                     printf("wl1 LED UP\n");
+-                    system("/etc/init.d/zywifid_led.sh enable wl1");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh enable wl1");
+                 }
+             }
+             else if (pLedInfo->ledType == ZY_KHWLEDALL)
+@@ -961,11 +946,11 @@
+                 boardIoctl_LED(pLedInfo->control, 0, pLedInfo->zy_LedName, pLedInfo->index, action_tr, NULL, pLedInfo->port);
+                 if(action == ZY_LED_DOWN)
+                 {
+-                    system("/etc/init.d/zywifid_led.sh disable");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh disable");
+                 }
+                 else
+                 {
+-                    system("/etc/init.d/zywifid_led.sh enable");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh enable");
+                 }
+             }
+             else if (pLedInfo->ledType == ZY_KHWLEDALLEXCEPTPOWER)
+@@ -973,11 +958,11 @@
+                 boardIoctl_LED(pLedInfo->control, 0, pLedInfo->zy_LedName, pLedInfo->index, action_tr, NULL, pLedInfo->port);
+                 if(action == ZY_LED_DOWN)
+                 {
+-                    system("/etc/init.d/zywifid_led.sh disable");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh disable");
+                 }
+                 else
+                 {
+-                    system("/etc/init.d/zywifid_led.sh enable");
++                    ZOS_SYSTEM("/etc/init.d/zywifid_led.sh enable");
+                 }
+             }
+             else
+@@ -986,6 +971,22 @@
+         }
+     }
+ }
++
++int zyLedSet(char *name, int action) //for userspace (LED control)
++{
++    PZY_LEDCTL_INFO_COMMON pLedInfo;
++    for(pLedInfo = zyLedctlInfo_common; (pLedInfo->index != ZY_MAX_LED); pLedInfo++)
++    {
++        if( !strcmp(name, pLedInfo->zy_LedName))
++        {
++            led_control(pLedInfo->index, action);
++            return 1;
++        }
++    }
++    printf("led_set ERROR");
++    return 0;
++}
++
+ #else
+ void processLed(const int32_t ledType, const int32_t state)
+ {
+@@ -1099,7 +1100,7 @@
+  *  addr: the access memory address. For example 0xFFFF0000
+  *  value: read out or write into memory through it.
+  */
+-zcfgRet_t memaccess(int type, unsigned long addr, unsigned long *value)
++zcfgRet_t memaccess(int type, unsigned long long addr, unsigned long *value)
+ {
+ 	int siz = 4;
+ 	BOARD_MEMACCESS_IOCTL_PARMS parms;
+@@ -1110,7 +1111,7 @@
+ 		printf ("Can't open /dev/brcmboard ");
+ 	}
+ 
+-	parms.address = (void *)addr;
++	parms.address = addr;
+ 	parms.size = siz;
+ 	parms.space = BOARD_MEMACCESS_IOCTL_SPACE_REG;
+ 	parms.count = 1;
+@@ -1230,7 +1231,6 @@
+ {
+     int boardFd = 0;
+     int rc = 0;
+-    unsigned int offset = 0;
+     BOARD_IOCTL_PARMS ioctlParms;
+ 
+     boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+@@ -1273,7 +1273,6 @@
+ {
+     int boardFd = 0;
+     int rc = 0;
+-    unsigned int offset = 0;
+     BOARD_IOCTL_PARMS ioctlParms;
+ 
+     boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+@@ -1326,7 +1325,6 @@
+ {
+     int boardFd = 0;
+     int rc = 0;
+-    unsigned int offset = 0;
+     BOARD_IOCTL_PARMS ioctlParms;
+ 
+     boardFd = open(BOARD_DEVICE_NAME, O_RDWR);
+Index: libzyutil-1.0/zyutil_sfp.c
+===================================================================
+--- libzyutil-1.0.orig/zyutil_sfp.c	2021-01-28 02:18:35.456024367 +0800
++++ libzyutil-1.0/zyutil_sfp.c	2021-01-28 02:18:35.667918367 +0800
+@@ -220,7 +220,12 @@
+ 	int value = 0;
+     fp = popen("ethctl phy int 6 1 | awk '{print $5}'", "r");
+ 	if(fp){
+-		fgets(str, sizeof(str), fp);
++		if( fgets(str, sizeof(str), fp) == NULL )
++		{
++			DEBUG_PRINT("[%s] : cannot get the return value.\n", __func__);
++			pclose(fp);
++			return -1;
++		}
+ 		pclose(fp);
+ 	}
+     if(sscanf(str, "0x%x", &value)==1)
+@@ -317,7 +322,7 @@
+ 	int i=0;
+ 	
+ 	char ss[DDMI_STRING_MAX_LENGTH] = {0};
+-	unsigned char temp[3] = {0};
++	char temp[3] = {0};
+ 	
+ 	for(i=0;i<length;i++){
+ 		sprintf(temp, "%02X" ,_string2[i]);
+@@ -341,9 +346,9 @@
+ 
+ int dump_DDMI_state(sfp_ddmi_state_t *ddmi_state)
+ {
+-	dumpString( &ddmi_state->sfp_vendor, DDMI_STRING_MAX_LENGTH);
+-	dumpString( &ddmi_state->sfp_pn, DDMI_STRING_MAX_LENGTH);
+-	dumpString( &ddmi_state->sfp_sn, DDMI_STRING_MAX_LENGTH);
++	dumpString( ddmi_state->sfp_vendor, DDMI_STRING_MAX_LENGTH);
++	dumpString( ddmi_state->sfp_pn, DDMI_STRING_MAX_LENGTH);
++	dumpString( ddmi_state->sfp_sn, DDMI_STRING_MAX_LENGTH);
+ 
+     printf("DDMI state:\n");
+     printf("sfp/bosa present   = %d\n",        ddmi_state->present);
+@@ -539,9 +544,9 @@
+     struct ifreq i = {0};
+     IOCTL_MIB_INFO out = {0};
+     strcpy(i.ifr_name, ifname);
+-    i.ifr_data = &out;
++    i.ifr_data = (char *)&out;
+     int32_t sock = socket(AF_INET, SOCK_DGRAM, 0);
+-    int32_t ret = ioctl(sock, SIOCMIBINFO, &i);
++
+     if(ioctl(sock, SIOCMIBINFO, &i) != 0){
+         perror("ioctl error");
+       close(sock);
+Index: libzyutil-1.0/Makefile
+===================================================================
+--- libzyutil-1.0.orig/Makefile	2021-01-28 02:18:35.563970368 +0800
++++ libzyutil-1.0/Makefile	2021-01-28 02:18:35.667918367 +0800
+@@ -21,8 +21,8 @@
+ ALLOWED_INCLUDE_PATHS += -I$(INC_BRCMDRIVER_PUB_PATH)/$(BRCM_BOARD)  \
+                          -I$(INC_BRCMDRIVER_PRIV_PATH)/$(BRCM_BOARD) \
+                          -I$(INC_BRCMSHARED_PUB_PATH)/$(BRCM_BOARD) \
+-                         -I$(BUILD_DIR)/shared/broadcom/include/$(BRCM_BOARD) \
+-                         -I$(BUILD_DIR)/shared/opensource/include/$(BRCM_BOARD)
++                         -I$(BCM_BUILD_DIR)/shared/broadcom/include/$(BRCM_BOARD) \
++                         -I$(BCM_BUILD_DIR)/shared/opensource/include/$(BRCM_BOARD)
+ 
+ INC_PATH += $(ALLOWED_INCLUDE_PATHS)
+ endif
+@@ -131,7 +131,7 @@
+ LIB_OBJS += zyutil_sfp.o
+ 
+ # ZYXEL_FEATURE_BITS
+-ifneq ($(findstring ZYXEL_FEATURE_BITS,$(EXTRA_CFLAGS)),)
++ifneq ($(findstring ZYXEL_FEATURE_BITS,$(ZYXEL_LIB_CFLAGS)),)
+ LIB_OBJS += libzyutil_zyxelfeaturebits.o
+ endif
+ 
+@@ -142,7 +142,7 @@
+ LIB_OBJS += libzyutil_encrypt/libzyutil_encrypt.o
+ LIB_OBJS += libzyutil_encrypt/libzyutil_encrypt_SHA256.o
+ LIB_OBJS += libzyutil_encrypt/libzyutil_encrypt_MD5.o
+-LDFLAGS += -L$(STAGING_DIR)/usr/lib
++#LDFLAGS += -L$(STAGING_DIR)/usr/lib
+ .PHONY : libzyutil
+ 
+ all: clean libzyutil libdebug.a
+@@ -151,11 +151,12 @@
+ .c.o:
+ 	$(CC) -c -fPIC $(CFLAGS) $(LIBS_PATH) $(INC_PATH) $< -o $@
+ 
+-libzyutil : $(LIB_OBJS)
+-	@echo $(CFLAGS) 
++libzyutil : debug $(LIB_OBJS)
+ 	$(CC) -shared -o libzyutil.so $(LIB_OBJS) $(LINK_LIBS) $(LDFLAGS)
+ 	$(STRIP) libzyutil.so
+ 
++debug:
++	@echo CFLAGS=$(CFLAGS)
+ 
+ libdebug.a : $(LIB_DEBUG_OBJS)
+ 	$(AR) rs $@ $(LIB_DEBUG_OBJS)
+@@ -172,15 +173,15 @@
+ 	rm -rf $(COMMON_ZCFG_INCLUDE_DIR)/zyutil_cofw.h
+ 	rm -rf $(COMMON_ZCFG_INCLUDE_DIR)/zyutil_sfp.h
+ 
+-CURR_DIR:=$(shell pwd)
+-BUILD_DIR:=$(subst /userspace, /userspace,$(CURR_DIR))
+-BUILD_DIR:=$(word 1, $(BUILD_DIR))
++#CURR_DIR:=$(shell pwd)
++#BUILD_DIR:=$(subst /userspace, /userspace,$(CURR_DIR))
++#BUILD_DIR:=$(word 1, $(BUILD_DIR))
+ 
+ ifeq ($(ZCFG_PLATFORM),BROADCOM)
+-include $(BUILD_DIR)/make.common
++include $(BCM_BUILD_DIR)/make.common
+ endif
+ 
+-CFLAGS+= $(ZCFLAGS) $(EXTRA_CFLAGS)
++CFLAGS+= $(ZCFLAGS) $(ZYXEL_LIB_CFLAGS)
+ CFLAGS +=  -DZYXEL_PRODUCT_NAME='"$(PRODUCT_NAME)"'
+ 
+ ifeq ($(strip $(CONFIG_SUNRISE_RELEASE_DHCP_PPP_BEFORE_IFDOWN)),y)
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2021-01-28 02:18:35.631936368 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2021-01-28 02:20:23.082184185 +0800
+@@ -63,7 +63,7 @@
+ #endif //#ifdef ECONET_PLATFORM
+ 
+ #ifdef BROADCOM_PLATFORM
+-zcfgRet_t memaccess(int type, unsigned long addr, unsigned long *value);
++zcfgRet_t memaccess(int type, unsigned long long addr, unsigned long *value);
+ #endif
+ 
+ typedef enum

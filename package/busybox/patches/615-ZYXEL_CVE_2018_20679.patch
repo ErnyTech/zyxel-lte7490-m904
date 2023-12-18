@@ -1,0 +1,152 @@
+diff -urN busybox-1_20_1.orig/networking/udhcp/common.c busybox-1_20_1/networking/udhcp/common.c
+--- busybox-1_20_1.orig/networking/udhcp/common.c	2021-12-02 15:51:16.513341117 +0800
++++ busybox-1_20_1/networking/udhcp/common.c	2021-12-02 16:11:36.044332900 +0800
+@@ -222,9 +222,12 @@
+ 	rem = sizeof(packet->options);
+ 	while (1) {
+ 		if (rem <= 0) {
++ complain:
+ 			bb_error_msg("bad packet, malformed option field");
+ 			return NULL;
+ 		}
++
++		/* DHCP_PADDING and DHCP_END have no [len] byte */
+ 		if (optionptr[OPT_CODE] == DHCP_PADDING) {
+ 			rem--;
+ 			optionptr++;
+@@ -247,13 +250,25 @@
+ 			}
+ 			break;
+ 		}
++
++		if (rem <= OPT_LEN)
++			goto complain; /* complain and return NULL */
+ 		len = 2 + optionptr[OPT_LEN];
+ 		rem -= len;
+ 		if (rem < 0)
+-			continue; /* complain and return NULL */
++			goto complain; /* complain and return NULL */
+ 
+ 		if (optionptr[OPT_CODE] == code) {
+-			log_option("Option found", optionptr);
++			if (optionptr[OPT_LEN] == 0) {
++				/* So far no valid option with length 0 known.
++				 * Having this check means that searching
++				 * for DHCP_MESSAGE_TYPE need not worry
++				 * that returned pointer might be unsafe
++				 * to dereference.
++				 */
++				goto complain; /* complain and return NULL */
++			}
++			log_option("option found", optionptr);
+ 			return optionptr + OPT_DATA;
+ 		}
+ 
+@@ -269,6 +284,16 @@
+ 	return NULL;
+ }
+ 
++uint8_t* FAST_FUNC udhcp_get_option32(struct dhcp_packet *packet, int code)
++{
++	uint8_t *r = udhcp_get_option(packet, code);
++	if (r) {
++		if (r[-1] != 4)
++			r = NULL;
++	}
++	return r;
++}
++
+ /* Return the position of the 'end' option (no bounds checking) */
+ int FAST_FUNC udhcp_end_option(uint8_t *optionptr)
+ {
+diff -urN busybox-1_20_1.orig/networking/udhcp/common.h busybox-1_20_1/networking/udhcp/common.h
+--- busybox-1_20_1.orig/networking/udhcp/common.h	2021-12-02 15:51:16.505341117 +0800
++++ busybox-1_20_1/networking/udhcp/common.h	2021-12-02 16:02:48.582234300 +0800
+@@ -193,6 +193,10 @@
+ unsigned FAST_FUNC udhcp_option_idx(const char *name);
+ 
+ uint8_t *udhcp_get_option(struct dhcp_packet *packet, int code) FAST_FUNC;
++/* Same as above + ensures that option length is 4 bytes
++ * (returns NULL if size is different)
++ */
++uint8_t *udhcp_get_option32(struct dhcp_packet *packet, int code) FAST_FUNC;
+ int udhcp_end_option(uint8_t *optionptr) FAST_FUNC;
+ void udhcp_add_binary_option(struct dhcp_packet *packet, uint8_t *addopt) FAST_FUNC;
+ void udhcp_add_simple_option(struct dhcp_packet *packet, uint8_t code, uint32_t data) FAST_FUNC;
+diff -urN busybox-1_20_1.orig/networking/udhcp/dhcpc.c busybox-1_20_1/networking/udhcp/dhcpc.c
+--- busybox-1_20_1.orig/networking/udhcp/dhcpc.c	2021-12-02 15:51:16.505341117 +0800
++++ busybox-1_20_1/networking/udhcp/dhcpc.c	2021-12-02 16:03:54.308851300 +0800
+@@ -1605,7 +1605,7 @@
+  * might work too.
+  * "Next server" and router are definitely wrong ones to use, though...
+  */
+-				temp = udhcp_get_option(&packet, DHCP_SERVER_ID);
++				temp = udhcp_get_option32(&packet, DHCP_SERVER_ID);
+ 				if (!temp) {
+ 					bb_error_msg("no server ID, ignoring packet");
+ 					continue;
+@@ -1631,7 +1631,7 @@
+ 				uint32_t lease_seconds;
+ 				struct in_addr temp_addr;
+ 
+-				temp = udhcp_get_option(&packet, DHCP_LEASE_TIME);
++				temp = udhcp_get_option32(&packet, DHCP_LEASE_TIME);
+ 				if (!temp) {
+ 					bb_error_msg("no lease time with ACK, using 1 hour lease");
+ 					lease_seconds = 60 * 60;
+@@ -1707,6 +1707,25 @@
+ 				continue; /* back to main loop */
+ 			}
+ 			if (*message == DHCPNAK) {
++				/* If network has more than one DHCP server,
++				 * "wrong" server can reply first, with a NAK.
++				 * Do not interpret it as a NAK from "our" server.
++				 */
++				if (server_addr != 0) {
++					uint32_t svid;
++					uint8_t *temp;
++
++					temp = udhcp_get_option32(&packet, DHCP_SERVER_ID);
++					if (!temp) {
++ non_matching_svid:
++						log1("received DHCP NAK with wrong"
++							" server ID, ignoring packet");
++						continue;
++					}
++					move_from_unaligned32(svid, temp);
++					if (svid != server_addr)
++						goto non_matching_svid;
++				}
+ 				/* return to init state */
+ 				bb_info_msg("Received DHCP NAK");
+ 				udhcp_run_script(&packet, "nak");
+diff -urN busybox-1_20_1.orig/networking/udhcp/dhcpd.c busybox-1_20_1/networking/udhcp/dhcpd.c
+--- busybox-1_20_1.orig/networking/udhcp/dhcpd.c	2021-12-02 15:51:16.513341117 +0800
++++ busybox-1_20_1/networking/udhcp/dhcpd.c	2021-12-02 16:05:06.371184600 +0800
+@@ -130,7 +130,7 @@
+ static uint32_t select_lease_time(struct dhcp_packet *packet)
+ {
+ 	uint32_t lease_time_sec = server_config.max_lease_sec;
+-	uint8_t *lease_time_opt = udhcp_get_option(packet, DHCP_LEASE_TIME);
++	uint8_t *lease_time_opt = udhcp_get_option32(packet, DHCP_LEASE_TIME);
+ 	if (lease_time_opt) {
+ 		move_from_unaligned32(lease_time_sec, lease_time_opt);
+ 		lease_time_sec = ntohl(lease_time_sec);
+@@ -455,7 +455,7 @@
+ 		}
+ 
+ 		/* Get SERVER_ID if present */
+-		server_id_opt = udhcp_get_option(&packet, DHCP_SERVER_ID);
++		server_id_opt = udhcp_get_option32(&packet, DHCP_SERVER_ID);
+ 		if (server_id_opt) {
+ 			uint32_t server_id_network_order;
+ 			move_from_unaligned32(server_id_network_order, server_id_opt);
+@@ -479,7 +479,7 @@
+ 		}
+ 
+ 		/* Get REQUESTED_IP if present */
+-		requested_ip_opt = udhcp_get_option(&packet, DHCP_REQUESTED_IP);
++		requested_ip_opt = udhcp_get_option32(&packet, DHCP_REQUESTED_IP);
+ 		if (requested_ip_opt) {
+ 			move_from_unaligned32(requested_nip, requested_ip_opt);
+ 		}

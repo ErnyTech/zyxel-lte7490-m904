@@ -1,0 +1,30 @@
+Index: ntpclient-2007/ntpclient.c
+===================================================================
+--- ntpclient-2007.orig/ntpclient.c
++++ ntpclient-2007/ntpclient.c
+@@ -32,7 +32,7 @@
+  *  labelled "XXX fixme - non-automatic build configuration".
+  */
+ 
+-#define _POSIX_C_SOURCE 199309
++#define _POSIX_C_SOURCE 200112L
+ 
+ #ifdef USE_OBSOLETE_GETTIMEOFDAY
+ #define _BSD_SOURCE
+Index: ntpclient-2007/Makefile
+===================================================================
+--- ntpclient-2007.orig/Makefile
++++ ntpclient-2007/Makefile
+@@ -15,7 +15,12 @@ CFLAGS += -DENABLE_REPLAY
+ # CFLAGS += -DUSE_OBSOLETE_GETTIMEOFDAY
+ CFLAGS += -DZyXEL_PATCH
+ 
++ifeq ($(CONFIG_TARGET_quectel),y)
++ZYXEL_LIBS = -lzcfg_msg -lzos -lzlog
++else
+ ZYXEL_LIBS = -lzcfg_msg
++endif
++
+ LDFLAGS += -lrt $(ZYXEL_LIBS)
+ 
+ all: ntpclient

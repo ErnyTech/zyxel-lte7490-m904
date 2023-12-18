@@ -1,0 +1,27 @@
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_NEW/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-01-14 18:00:38.285759517 +0800
++++ mosquitto-1.6.7_NEW/client/pub_client.c	2020-01-14 18:01:08.441758895 +0800
+@@ -680,7 +680,22 @@
+ 		goto cleanup;
+ 	}
+ 
+-	rc = client_connect(mosq, &cfg);
++	//rc = client_connect(mosq, &cfg);
++
++//#ifndef ZYXEL_MQTT_PUBLISHER
++#if 1
++	do{
++		rc = client_connect(mosq, &cfg);
++		if(rc != MOSQ_ERR_SUCCESS){
++			printf("[MQTT PUB][CONNECTING FAIL] Sleep 5 seconds and then try to connect again.\n");
++			sleep(5);
++			continue;
++		}
++		else{
++			break;
++		}
++	}while(1);
++#endif
+ 	if(rc){
+ 		goto cleanup;
+ 	}

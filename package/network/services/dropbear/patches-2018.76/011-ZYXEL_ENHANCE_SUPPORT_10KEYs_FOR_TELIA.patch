@@ -1,0 +1,175 @@
+diff -urN dropbear-2018.76.orig/Makefile.in dropbear-2018.76/Makefile.in
+--- dropbear-2018.76.orig/Makefile.in	2019-03-27 16:00:33.368388727 +0800
++++ dropbear-2018.76/Makefile.in	2019-03-27 16:29:01.516408471 +0800
+@@ -113,6 +113,11 @@
+ 	CFLAGS += -DZYXEL_CLI_IDLE_TIMEOUT
+ endif
+ 
++#Telia
++ifeq ($(CONFIG_TELIA_CUSTOMIZATION),y)
++	CFLAGS += -DTELIA_CUSTOMIZATION
++endif
++
+ # these are exported so that libtomcrypt's makefile will use them
+ export CC
+ export CFLAGS
+diff -urN dropbear-2018.76.orig/svr-authpubkey.c dropbear-2018.76/svr-authpubkey.c
+--- dropbear-2018.76.orig/svr-authpubkey.c	2019-03-27 16:00:33.280388726 +0800
++++ dropbear-2018.76/svr-authpubkey.c	2019-03-28 16:50:05.014662309 +0800
+@@ -292,6 +292,104 @@
+ /* Checks whether a specified publickey (and associated algorithm) is an
+  * acceptable key for authentication */
+ /* Returns DROPBEAR_SUCCESS if key is ok for auth, DROPBEAR_FAILURE otherwise */
++#ifdef TELIA_CUSTOMIZATION
++static int checkpubkey(const char* algo, unsigned int algolen,
++		const unsigned char* keyblob, unsigned int keybloblen){
++
++	FILE * authfile = NULL;
++	char filename[64] = {0};
++	int ret = DROPBEAR_FAILURE;
++	buffer * line = NULL;
++	unsigned int len;
++	int line_num;
++	uid_t origuid;
++	gid_t origgid;
++	int index =0;
++
++	TRACE(("enter checkpubkey"))
++	//dropbear_log(LOG_NOTICE,"enter checkpubkey");
++	/* check that we can use the algo */
++	if (have_algo(algo, algolen, sshhostkey) == DROPBEAR_FAILURE) {
++		dropbear_log(LOG_WARNING,
++		//dropbear_log(LOG_NOTICE,
++				"Pubkey auth attempt with unknown algo for '%s' from %s",
++				ses.authstate.pw_name, svr_ses.addrstring);
++		return ret;
++	}
++
++	/* check file permissions, also whether file exists */
++	if (checkpubkeyperms() == DROPBEAR_FAILURE) {
++		TRACE(("bad authorized_keys permissions, or file doesn't exist"))
++		//dropbear_log(LOG_NOTICE,"bad authorized_keys permissions, or file doesn't exist");
++		return ret;
++	}
++
++	/* we don't need to check pw and pw_dir for validity, since
++	 * its been done in checkpubkeyperms. */
++	len = strlen(ses.authstate.pw_dir);
++
++	/* open the file as the authenticating user. */
++	origuid = getuid();
++	origgid = getgid();
++	if ((setegid(ses.authstate.pw_gid)) < 0 ||
++		(seteuid(ses.authstate.pw_uid)) < 0) {
++		dropbear_exit("Failed to set euid");
++	}
++
++	
++	if ((seteuid(origuid)) < 0 ||
++		(setegid(origgid)) < 0) {
++		dropbear_exit("Failed to revert euid");
++	}
++	
++	do {
++		sprintf(filename,"/data/dropbear/authorized_%d_keys",index);
++		//dropbear_log(LOG_NOTICE,"filename:%s",filename);		
++		authfile = fopen(filename, "r");
++		if (authfile == NULL) {
++			goto contin;
++		}
++		TRACE(("checkpubkey: opened authorized_keys OK"))
++		//dropbear_log(LOG_NOTICE,"checkpubkey: opened authorized_keys OK");
++
++		line = buf_new(MAX_AUTHKEYS_LINE);
++		line_num = 0;
++
++		/* iterate through the lines */
++		do {
++			//dropbear_log(LOG_NOTICE,"checkpubkey_line");
++			if (buf_getline(line, authfile) == DROPBEAR_FAILURE) {
++				/* EOF reached */
++				TRACE(("checkpubkey: authorized_keys EOF reached"))
++				//dropbear_log(LOG_NOTICE,"checkpubkey: authorized_keys EOF reached");
++				buf_free(line);
++				break;
++			}
++			line_num++;
++
++			ret = checkpubkey_line(line, line_num, filename, algo, algolen, keyblob, keybloblen);
++			if (ret == DROPBEAR_SUCCESS) {
++				buf_free(line);
++				break;
++			}
++
++		} while (1);
++		//dropbear_log(LOG_NOTICE,"ret=%d, index=%d", ret,index);
++	contin:		
++		if (authfile) {
++			//dropbear_log(LOG_NOTICE,"contin:fclose");
++			fclose(authfile);
++		}
++		index++;
++		if (ret == DROPBEAR_SUCCESS) {
++			break;
++		}
++	}while (index < 10);	
++	//dropbear_log(LOG_NOTICE,"leave checkpubkey: ret=%d", ret);
++	TRACE(("leave checkpubkey: ret=%d", ret))
++	return ret;
++}
++#else
+ static int checkpubkey(const char* algo, unsigned int algolen,
+ 		const unsigned char* keyblob, unsigned int keybloblen) {
+ 
+@@ -387,13 +485,42 @@
+ 	TRACE(("leave checkpubkey: ret=%d", ret))
+ 	return ret;
+ }
+-
++#endif
+ 
+ /* Returns DROPBEAR_SUCCESS if file permissions for pubkeys are ok,
+  * DROPBEAR_FAILURE otherwise.
+  * Checks that the user's homedir, ~/.ssh, and
+  * ~/.ssh/authorized_keys are all owned by either root or the user, and are
+  * g-w, o-w */
++#ifdef TELIA_CUSTOMIZATION
++static int checkpubkeyperms(){
++
++	char filename[64] = {0}; 
++	int ret = DROPBEAR_FAILURE;
++	unsigned int len;
++	int index = 0;
++
++	TRACE(("enter checkpubkeyperms"))
++	//dropbear_log(LOG_NOTICE,"enter checkpubkeyperms");	
++	do {	
++		sprintf(filename,"/data/dropbear/authorized_%d_keys",index);
++		//dropbear_log(LOG_NOTICE,"/data/dropbear/authorized_%d_keys",index);
++
++		if (checkfileperm(filename) == DROPBEAR_SUCCESS) {
++			ret = DROPBEAR_SUCCESS;
++			break;
++		}
++		index++;
++				
++	}while (index < 10);
++	//dropbear_log(LOG_NOTICE,"ret:%d",ret);	
++	TRACE(("leave checkpubkeyperms"))
++	//dropbear_log(LOG_NOTICE,"leave checkpubkeyperms");	
++	return ret;
++}
++
++
++#else
+ static int checkpubkeyperms() {
+ 
+ 	char* filename = NULL; 
+@@ -449,6 +576,7 @@
+ 	TRACE(("leave checkpubkeyperms"))
+ 	return ret;
+ }
++#endif
+ 
+ /* Checks that a file is owned by the user or root, and isn't writable by
+  * group or other */

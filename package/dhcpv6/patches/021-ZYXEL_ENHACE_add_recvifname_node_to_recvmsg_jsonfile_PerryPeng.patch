@@ -1,0 +1,63 @@
+--- a/addrconf.c
++++ b/addrconf.c
+@@ -423,7 +423,7 @@ addr_timo(arg)
+ 	remove_addr(sa);
+ 
+ 	(*callback)(ia);
+-	dhcp6_lifetime_timeout();
++	dhcp6_lifetime_timeout(sa->dhcpif->ifname);
+ 
+ 	return (NULL);
+ }
+--- a/common.h
++++ b/common.h
+@@ -121,6 +121,7 @@ struct dhcp6c_Msg {
+ 	int addrAssigned;
+ 	int addrCmd;
+ 	char ifname[32];
++	char recvifname[32];
+ 	char addr[128];
+ 	int addrPltime;
+ 	int addrVltime;
+--- a/dhcp6c.c
++++ b/dhcp6c.c
+@@ -281,7 +281,10 @@ usage()
+ 
+ void dhcpMsgToJsonFormat(struct json_object *dhcp6cMsgBody){
+ 	if(dhcp6cMsg.eidtPid)
++	{
+ 		json_object_object_add(dhcp6cMsgBody, "pidfile", json_object_new_string(dhcp6cMsg.pidfile)); //add pid_file information
++		json_object_object_add(dhcp6cMsgBody, "recvifname", json_object_new_string(dhcp6cMsg.recvifname)); //add receive interface name information
++	}
+ 	if(dhcp6cMsg.editAddr){
+ 		json_object_object_add(dhcp6cMsgBody, "addrAssigned", json_object_new_boolean(dhcp6cMsg.addrAssigned));
+ 		json_object_object_add(dhcp6cMsgBody, "addrCmd", json_object_new_int(dhcp6cMsg.addrCmd));
+@@ -2322,6 +2325,9 @@ client6_recvreply(ifp, dh6, len, optinfo
+ 	int msgLen = 0;
+ /*end*/ 
+ 
++	/* Set receive interface name*/
++	strcpy(dhcp6cMsg.recvifname, ifp->ifname);
++
+ 	/* find the corresponding event based on the received xid */
+ 	ev = find_event_withid(ifp, ntohl(dh6->dh6_xid) & DH6_XIDMASK);
+ 	if (ev == NULL) {
+@@ -3131,14 +3137,17 @@ void addDnsInfoToMsg(const char *nameser
+ 	return;
+ }
+ 
+-void dhcp6_lifetime_timeout()
++void dhcp6_lifetime_timeout(char* ifName)
+ {
+ 	struct json_object *dhcp6cJsonMsg = NULL;
+ 	char *msg = NULL;
+ 	int msgLen = 0;
+ 	dhcp6cJsonMsg = json_object_new_object();
+ 	strcpy(dhcp6cMsg.pidfile, pid_file);
++	strcpy(dhcp6cMsg.recvifname, ifName);
++	dprintf(LOG_DEBUG, FNAME, "%s", ifName);
+ 	json_object_object_add(dhcp6cJsonMsg, "pidfile", json_object_new_string(dhcp6cMsg.pidfile));
++	json_object_object_add(dhcp6cJsonMsg, "recvifname", json_object_new_string(dhcp6cMsg.recvifname));
+ 	json_object_object_add(dhcp6cJsonMsg, "timeout", json_object_new_boolean(true));	
+ 	msg = json_object_to_json_string(dhcp6cJsonMsg);
+ 	msgLen = strlen(msg) + 1;

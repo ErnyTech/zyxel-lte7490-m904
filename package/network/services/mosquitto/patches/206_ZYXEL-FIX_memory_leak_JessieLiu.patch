@@ -1,0 +1,376 @@
+diff -urN mosquitto-1.6.7/client/client_shared.c mosquitto-1.6.7_modified/client/client_shared.c
+--- mosquitto-1.6.7/client/client_shared.c	2020-02-27 11:02:05.563870046 +0800
++++ mosquitto-1.6.7_modified/client/client_shared.c	2020-02-27 10:55:07.623878666 +0800
+@@ -232,8 +232,8 @@
+ 		}
+ 		free(cfg->topics);
+ 	}
+-	//#ifdef ZYXEL_MQTT_PUBLISHER
+-	#if 1
++
++	#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	if(cfg->messages){
+ 		for(i=0; i<cfg->message_count; i++){
+ 			if(cfg->messages[i])
+@@ -292,6 +292,10 @@
+ #endif
+ 	args[0] = NULL;
+ 
++#if 1//ZYXEL_MQTT_PUBLISHER
++	client_config_cleanup(cfg);
++#endif
++	
+ 	init_config(cfg, pub_or_sub);
+ 
+ 	/* Default config file */
+@@ -481,8 +485,8 @@
+ 		fprintf(stderr, "Error: Malformed UTF-8 in %s argument.\n\n", arg);
+ 		return 1;
+ 	}
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	if(/*type == CLIENT_PUB || */type == CLIENT_RR){//mark type == CLIENT_PUB
+ #else
+ 	if(type == CLIENT_PUB || type == CLIENT_RR){
+@@ -499,10 +503,17 @@
+ 		}
+ 		cfg->response_topic = strdup(topic);
+ 	}else{
+-		if(mosquitto_sub_topic_check(topic) == MOSQ_ERR_INVAL){
++		#if 1 //ZYXEL_MQTT_PUBLISHER
++		if(mosquitto_pub_topic_check(topic) == MOSQ_ERR_INVAL){
++			fprintf(stderr, "Error: Invalid publish topic '%s', does it contain '+' or '#'?\n", topic);
++			return 1;
++		}
++		#else
++		if(mosquitto_sub_topic_check(topic) == MOSQ_ERR_INVAL){	
+ 			fprintf(stderr, "Error: Invalid subscription topic '%s', are all '+' and '#' wildcards correct?\n", topic);
+ 			return 1;
+ 		}
++		#endif
+ 		cfg->topic_count++;
+ 		cfg->topics = realloc(cfg->topics, cfg->topic_count*sizeof(char *));
+ 		if(!cfg->topics){
+@@ -514,8 +525,8 @@
+ 	return 0;
+ }
+ 
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ int cfg_add_message(struct mosq_config *cfg, int type, char *message, const char *arg)
+ {
+ 	
+@@ -579,6 +590,7 @@
+ 	cfg->messages = realloc(cfg->messages, cfg->message_count*sizeof(char *));
+ 	
+ 	if(!cfg->messages){
++		fclose(fptr);
+ 		printf("Error: Out of memory.\n");
+ 		return 1;
+ 	}
+@@ -586,7 +598,6 @@
+ 	
+ 	cfg->messages[cfg->message_count-1] = malloc(cfg->msglen);
+ 	if(!cfg->messages[cfg->message_count-1]){
+-		
+ 		fclose(fptr);
+ 		err_printf(&cfg, "Error: Out of memory.\n");
+ 		return 1;
+@@ -716,8 +727,7 @@
+ 				return 1;
+ 			}else{
+ 				cfg->pub_mode = MSGMODE_FILE;
+-				//#ifndef ZYXEL_MQTT_PUBLISHER
+-				#if 0
++				#if 0 //#ifndef ZYXEL_MQTT_PUBLISHER
+ 				cfg->file_input = strdup(argv[i+1]);
+ 				if(!cfg->file_input){
+ 					err_printf(cfg, "Error: Out of memory.\n");
+@@ -880,8 +890,7 @@
+ 			if(pub_or_sub == CLIENT_SUB){
+ 				goto unknown_option;
+ 			}
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 			/* 
+ 			if(cfg->pub_mode != MSGMODE_NONE){
+ 				fprintf(stderr, "Error: Only one type of message can be sent at once.\n\n");
+@@ -896,8 +905,7 @@
+ 				fprintf(stderr, "Error: -m argument given but no message specified.\n\n");
+ 				return 1;
+ 			}else{
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 				cfg->pub_mode = MSGMODE_CMD;
+ 				//printf("%s() argv[i + 1]=%s\n", __FUNCTION__, argv[i + 1]);
+ 				if(cfg_add_message(cfg, pub_or_sub, argv[i + 1], "-m"))
+@@ -910,8 +918,7 @@
+ 			}
+ 			i++;
+ 
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 		//informaion for deleting process
+ 		}else if(!strcmp(argv[i], "--parentIndex")){
+ 			cfg->parentIndex = atoi(argv[i+1]);
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_modified/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-02-27 11:02:05.671870044 +0800
++++ mosquitto-1.6.7_modified/client/pub_client.c	2020-02-27 11:01:04.311871309 +0800
+@@ -36,7 +36,7 @@
+ #include "pub_shared.h"
+ #include<unistd.h>//Jessie
+ #include<signal.h>//Jessie
+-//#include <pthread.h>//Jessie
++
+ /* Global variables for use in callbacks. See sub_client.c for an example of
+  * using a struct to hold variables for use in callbacks. */
+ static bool first_publish = true;
+@@ -48,12 +48,6 @@
+ static int publish_count = 0;
+ static bool ready_for_repeat = false;
+ 
+-#if 1//Jessie
+-int client_to_server;
+-char *myfifo = "/tmp/client_to_server_fifo";
+-//#define BUFSIZ 128
+-#endif
+-
+ #ifdef WIN32
+ static uint64_t next_publish_tv;
+ 
+@@ -131,8 +125,7 @@
+ void my_connect_callback(struct mosquitto *mosq, void *obj, int result, int flags, const mosquitto_property *properties)
+ {
+ 	int rc = MOSQ_ERR_SUCCESS;
+-//#ifdef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	int i;
+ #endif
+ 	UNUSED(obj);
+@@ -144,8 +137,7 @@
+ 			case MSGMODE_CMD:
+ 			case MSGMODE_FILE:
+ 			case MSGMODE_STDIN_FILE:
+-				//#ifdef ZYXEL_MQTT_PUBLISHER
+-				#if 1
++				#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 				//printf("%s() cfg.topic_count=%d\n", __FUNCTION__, cfg.topic_count);
+ 				for(i=0;i<cfg.topic_count;i++){
+ 					//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
+@@ -253,25 +245,21 @@
+ 	int argc;//Jessie
+ 	char **argv;//Jessie
+ 	bool stdin_finished = false;
+-	char buf[256];
++	char buf[1024];
+ 	char *backup = NULL;
+ 	if(cfg.repeat_count > 1 && (cfg.repeat_delay.tv_sec == 0 || cfg.repeat_delay.tv_usec != 0)){
+ 		loop_delay = cfg.repeat_delay.tv_usec / 2000;
+ 	}
+-
++	
+ 	mode = cfg.pub_mode;
+ 
+ 	if(mode == MSGMODE_STDIN_LINE){
+ 		mosquitto_loop_start(mosq);
+ 		stdin_finished = false;
+ 	}
+-
++	
+ 	do{
+ 		if(mode == MSGMODE_STDIN_LINE){
+-			//printf("%s() AAA \n", __FUNCTION__);
+-			memset(buf, 0, sizeof(buf));
+-						//read(client_to_server, buf, sizeof(buf));//Jessie QQQ
+-						//printf("%s() AAA buf=%s\n", __FUNCTION__, buf);
+ 			if(status == STATUS_CONNACK_RECVD){
+ 				pos = 0;
+ 				read_len = line_buf_len;
+@@ -299,6 +287,7 @@
+ 								argc++;
+ 								pch = strtok (NULL, delim);
+ 							}
++
+ 							argv = malloc( argc * sizeof(char *) );
+ 							if(argv){
+ 								//argv[argc] = malloc( 1 + strlen(pch) );
+@@ -319,20 +308,32 @@
+ 									argc++;
+ 									pch = strtok (NULL, delim);
+ 								}
+-								if(backup){
+-									free(backup);
++
++								rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
++								if(argv){
++										for(i=0;i<argc;i++){
++												if(argv[i] != NULL){
++														free(argv[i]);
++														argv[i] = NULL;
++												}
++										}
++										free(argv);
++										argv = NULL;
++								}
++
++								for(i=0;i<cfg.topic_count;i++){
++										//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
++										rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
+ 								}
+ 							}
+-							rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
+ 
+-							//printf ("%s() Jessie 333333333, rc=%d\n", __FUNCTION__, rc);
+-							for(i=0;i<cfg.topic_count;i++){
+-								//printf("%s() cfg.messages[i]=%s\n", __FUNCTION__, cfg.messages[i]);
+-								rc = my_publish(mosq, &mid_sent, cfg.topics[i], strlen(cfg.messages[i]), cfg.messages[i], cfg.qos, cfg.retain);
++							if(backup){
++								free(backup);
++								backup = NULL;
+ 							}
+ 						}
+ 						#endif//ZYXEL_MQTT_PUBLISHER
+-						rc2 = my_publish(mosq, &mid_sent, cfg.topic, buf_len_actual-1, line_buf, cfg.qos, cfg.retain);
++						//rc2 = my_publish(mosq, &mid_sent, cfg.topic, buf_len_actual-1, line_buf, cfg.qos, cfg.retain);
+ 						#if 0//Jessie test
+ 						if(rc2){
+ 							err_printf(&cfg, "Error: Publish returned %d, disconnecting.\n", rc2);
+@@ -390,10 +391,7 @@
+ 					case MSGMODE_CMD:
+ 					case MSGMODE_FILE:
+ 					case MSGMODE_STDIN_FILE:
+-						//printf("%s() 111 \n", __FUNCTION__);
+ 						memset(buf, 0, sizeof(buf));
+-						read(client_to_server, buf, sizeof(buf));//Jessie QQQ
+-						//printf("%s() 111 buf=%s\n", __FUNCTION__, buf);
+ 						#if 1//ZYXEL_MQTT_PUBLISHER
+ 						if(strlen(buf) != 0){
+ 							snprintf(backup, sizeof(backup), "%s", buf);
+@@ -573,29 +571,16 @@
+ 	printf("\nSee https://mosquitto.org/ for more information.\n\n");
+ }
+ 
+-#if 1 //ZYXEL_MQTT_PUBLISHER
+-#if 0
+-void* child(void* data) {
+-  char *str = (char*) data; // 取得輸入資料
+-  int i;
+-  for(i = 0;i < 3;++i) {
+-    printf("%s\n", str); // 每秒輸出文字
+-    sleep(1);
+-  }
+-  pthread_exit(NULL); // 離開子執行緒
+-}
+-#endif
+-#endif
+ 
+ int main(int argc, char *argv[])
+ {
+ 	struct mosquitto *mosq = NULL;
+ 	int rc;
+-	//char buf[256];
+-	pid_t pid = -1;//Jessie
+-	char pid_file[32];//Jessie
+-	FILE *fp = NULL;//Jessie
+-	pthread_t thread;
++	#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
++	pid_t pid = -1;
++	char pid_file[32];
++	FILE *fp = NULL;
++	#endif
+ 	mosquitto_lib_init();
+ 
+ 	if(pub_shared_init()) return 1;
+@@ -610,7 +595,7 @@
+ 		}
+ 		goto cleanup;
+ 	}
+-//printf("%s() 1111111111111111111\n", __FUNCTION__);
++
+ #if 1//Jessie move to the beginning (here)
+ 	snprintf(pid_file, sizeof(pid_file), "/tmp/mosquitto_pub_%d.pid", cfg.parentIndex);
+ 	//unlink(pid_file);
+@@ -634,7 +619,7 @@
+ 		goto cleanup;
+ 	}
+ #endif
+-//printf("%s() 2222222222222222222\n", __FUNCTION__);		
++	
+ 	if(cfg.pub_mode == MSGMODE_STDIN_FILE){
+ 		#if 0//Jessie ignore load_stdin()
+ 		if(load_stdin()){
+@@ -648,8 +633,8 @@
+ 			goto cleanup;
+ 		}
+ 	}
+-//#ifndef ZYXEL_MQTT_PUBLISHER
+-#if 0
++
++#if 0 //#ifndef ZYXEL_MQTT_PUBLISHER
+ 	if(!cfg.topic || cfg.pub_mode == MSGMODE_NONE){
+ 		fprintf(stderr, "Error: Both topic and message must be supplied.\n");
+ 		print_usage();
+@@ -680,27 +665,11 @@
+ 	mosquitto_disconnect_v5_callback_set(mosq, my_disconnect_callback);
+ 	mosquitto_publish_v5_callback_set(mosq, my_publish_callback);
+ 
+-	#if 0
+-	mkfifo(myfifo, 0666);//Jessie
+-	client_to_server = open(myfifo, O_RDONLY);//Jessie
+-	//memset(buf, 0, sizeof(buf));
+-	//read(client_to_server, buf, BUFSIZ);
+-	#endif
+-	
+-	//int err1;
+-	//int i;
+-	//pthread_t t;
+-//	err1 = pthread_create(&thread, NULL, fn, &i);
+-//pthread_create(&t, NULL, child, "Child");
+-	
+ 	if(client_opts_set(mosq, &cfg)){
+ 		goto cleanup;
+ 	}
+ 
+-	//rc = client_connect(mosq, &cfg);
+-
+-//#ifndef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	do{
+ 		rc = client_connect(mosq, &cfg);
+ 		if(rc != MOSQ_ERR_SUCCESS){
+@@ -712,6 +681,8 @@
+ 			break;
+ 		}
+ 	}while(1);
++#else
++	rc = client_connect(mosq, &cfg);
+ #endif
+ 	if(rc){
+ 		goto cleanup;
+@@ -719,8 +690,7 @@
+ 
+ 	rc = pub_shared_loop(mosq);
+ 
+-//#ifndef ZYXEL_MQTT_PUBLISHER
+-#if 1
++#if 1 //#ifdef ZYXEL_MQTT_PUBLISHER
+ 	if(cfg.message && cfg.pub_mode == MSGMODE_FILE){
+ 		free(cfg.message);
+ 		cfg.message = NULL;
+@@ -739,7 +709,5 @@
+ 	mosquitto_lib_cleanup();
+ 	client_config_cleanup(&cfg);
+ 	pub_shared_cleanup();
+-	close(client_to_server);
+-	unlink(myfifo);
+ 	return 1;
+ }

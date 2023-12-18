@@ -1,0 +1,128 @@
+--- a/include/cybergarage/ssl/cssl.h
++++ b/include/cybergarage/ssl/cssl.h
+@@ -42,6 +42,10 @@ typedef struct _Cgctx {
+ 	int verify_mode;
+ 	verify_callback_func verify_callback;
+ 	char *verify_cn;
++#ifdef ZYXEL_SUPPORT_TLS_PSK
++	char *psk_identity;
++	char *psk_key;
++#endif
+ } Cgctx;
+ 
+ /****************************************
+--- a/src/cybergarage/ssl/cssl.c
++++ b/src/cybergarage/ssl/cssl.c
+@@ -170,6 +170,101 @@ BOOL cg_ssl_set_verify(CgSocket *sock, C
+ 	return TRUE;
+ }
+ 
++#ifdef ZYXEL_SUPPORT_TLS_PSK
++int tls_ex_index = -1;
++
++unsigned int tls_psk_server_cb(
++	SSL_CTX *ctx,
++	const char *id,
++	unsigned char *psk,
++	unsigned int max_psk_len)
++{
++	Cgctx *ctxdata;
++	ctxdata = SSL_CTX_get_ex_data(ctx, tls_ex_index);
++
++	char *ctxdata_psk_identity = NULL;
++	ctxdata_psk_identity = strdup(ctxdata->psk_identity);
++
++	if (strcmp(ctxdata_psk_identity, id) != 0) {
++		printf("Unknown Client's PSK ID\n");
++		goto err;
++	}
++
++	if (strlen(ctxdata->psk_key) > max_psk_len) {
++		printf("Insufficient buffer size to copy ctxdata->psk_key\n");
++		goto err;
++	}
++	memcpy(psk, ctxdata->psk_key, strlen(ctxdata->psk_key));
++
++	return strlen(ctxdata->psk_key);
++
++err:
++	return 0;
++}
++
++unsigned int tls_psk_client_cb(
++	SSL_CTX *ctx,
++	const char *hint,
++	char *identity,
++	unsigned int max_identity_len,
++	unsigned char *psk,
++	unsigned int max_psk_len)
++{
++	Cgctx *ctxdata;
++	ctxdata = SSL_CTX_get_ex_data(ctx, tls_ex_index);
++
++	if ((strlen(ctxdata->psk_identity) + 1 > max_identity_len)
++			|| (strlen(ctxdata->psk_key) > max_psk_len)) {
++		printf("PSK ID or Key buffer is not sufficient\n");
++		goto err;
++	}
++
++	strcpy(identity, ctxdata->psk_identity);
++	memcpy(psk, ctxdata->psk_key, strlen(ctxdata->psk_key));
++	printf("Provided PSK for TLS client\n");
++
++	return strlen(ctxdata->psk_key);
++
++err:
++	return 0;
++}
++
++BOOL cg_ssl_set_psk_callback(CgSocket *sock, Cgctx *ctxdata ){
++
++	if (cg_socket_isssl(sock) != TRUE) return TRUE;
++
++	if(sock->ctx == NULL)
++#if 1 // SSL 3.0 Vulnerability (POODLE Attack)
++		sock->ctx = SSL_CTX_new( cg_socket_isserver(sock)?TLSv1_2_server_method():TLSv1_2_client_method() );
++#else
++	sock->ctx = SSL_CTX_new( cg_socket_isserver(sock)?SSLv23_server_method():SSLv23_client_method() );
++#endif
++
++	// YuChih@20210930: Set external ctxdata for SSL_CTX callback function
++	if(tls_ex_index == -1) {
++		tls_ex_index = SSL_get_ex_new_index(0, "external context", NULL, NULL, NULL);
++	}
++	SSL_CTX_set_ex_data(sock->ctx, tls_ex_index, ctxdata);
++
++	// YuChih@20210930: set callback when PSK id and key exist
++	if(ctxdata->psk_identity && ctxdata->psk_key) {
++
++		if (cg_socket_isserver(sock)) {
++			SSL_CTX_set_psk_server_callback(sock->ctx, tls_psk_server_cb);
++		}
++		else {
++			SSL_CTX_set_psk_client_callback(sock->ctx, tls_psk_client_cb);
++
++			// YuChih@20210930: In SSL/TLS, cipher suites have precedence order, so specify it.
++			SSL_CTX_set_cipher_list(sock->ctx, "PSK");
++		}
++	}
++
++	return TRUE;
++}
++#endif // ZYXEL_SUPPORT_TLS_PSK
++
++
+ BOOL cg_ssl_set_ctx(CgSocket *sock, void *ctxdata){
+ 
+ 	if (cg_socket_isssl(sock) != TRUE) return TRUE;
+@@ -190,6 +285,10 @@ BOOL cg_ssl_set_ctx(CgSocket *sock, void
+ 	cg_ssl_set_cert( sock,  (Cgctx *)ctxdata );
+ 	cg_ssl_set_ca( sock,  (Cgctx *)ctxdata );
+ 
++#ifdef ZYXEL_SUPPORT_TLS_PSK
++	cg_ssl_set_psk_callback( sock, (Cgctx *)ctxdata );
++#endif
++
+ 	return TRUE;
+ }
+ 

@@ -1,0 +1,38 @@
+diff -urN busybox-1_20_1.orig/archival/libarchive/decompress_unlzma.c busybox-1_20_1/archival/libarchive/decompress_unlzma.c
+--- busybox-1_20_1.orig/archival/libarchive/decompress_unlzma.c	2021-12-02 11:01:26.497332868 +0800
++++ busybox-1_20_1/archival/libarchive/decompress_unlzma.c	2021-12-02 11:28:57.825694400 +0800
+@@ -433,8 +433,11 @@
+  IF_NOT_FEATURE_LZMA_FAST(string:)
+ 			do {
+ 				uint32_t pos = buffer_pos - rep0;
+-				while (pos >= header.dict_size)
++				if ((int32_t)pos < 0) {
+ 					pos += header.dict_size;
++					if ((int32_t)pos < 0)
++						goto bad;
++				}
+ 				previous_byte = buffer[pos];
+  IF_NOT_FEATURE_LZMA_FAST(one_byte2:)
+ 				buffer[buffer_pos++] = previous_byte;
+diff -urN busybox-1_20_1.orig/libbb/lineedit.c busybox-1_20_1/libbb/lineedit.c
+--- busybox-1_20_1.orig/libbb/lineedit.c	2021-12-02 11:01:26.109332868 +0800
++++ busybox-1_20_1/libbb/lineedit.c	2021-12-02 11:46:53.136468800 +0800
+@@ -627,6 +627,18 @@
+ 
+ static void add_match(char *matched)
+ {
++	unsigned char *p = (unsigned char*)matched;
++	while (*p) {
++		/* ESC attack fix: drop any string with control chars */
++		if (*p < ' '
++		 || (!ENABLE_UNICODE_SUPPORT && *p >= 0x7f)
++		 || (ENABLE_UNICODE_SUPPORT && *p == 0x7f)
++		) {
++			free(matched);
++			return;
++		}
++		p++;
++	}
+ 	matches = xrealloc_vector(matches, 4, num_matches);
+ 	matches[num_matches] = matched;
+ 	num_matches++;

@@ -1,0 +1,37 @@
+Index: libzyutil-1.0/common.c
+===================================================================
+--- libzyutil-1.0.orig/common.c	2020-09-25 17:22:03.988390625 +0800
++++ libzyutil-1.0/common.c	2020-09-25 17:23:14.010363474 +0800
+@@ -1856,3 +1856,20 @@
+ 	strcpy(source, result);
+ }
+ 
++int zyUtilReadPidfile(char *pidFile)
++{
++	FILE        *fptr = NULL;
++	int         pid = 0;
++
++	fptr = fopen(pidFile, "r");
++	if (fptr == NULL)
++	{
++	    ZLOG_WARNING("fail to open pid file = %s", pidFile);
++	    return 0;
++	}
++
++	fscanf(fptr, "%d", &pid);
++	fclose(fptr);
++
++	return pid;
++}
+Index: libzyutil-1.0/zyutil.h
+===================================================================
+--- libzyutil-1.0.orig/zyutil.h	2020-09-25 17:22:03.988390625 +0800
++++ libzyutil-1.0/zyutil.h	2020-09-25 17:23:14.025928789 +0800
+@@ -17,6 +17,7 @@
+ void zyUtilBackslashInsert(char *);
+ void zyUtilBackslashInForEcho(char *);
+ int32_t zyUtilOidGet(const char *objNameAbbr);
++int zyUtilReadPidfile(char *pidFile);
+ 
+ zcfgRet_t zyUtilIGetBaseMACwithColon(char *mac);
+ zcfgRet_t zyUtilMacStrToNum(const char *, uint8_t *);

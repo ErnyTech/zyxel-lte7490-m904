@@ -1,0 +1,189 @@
+Index: clinkc/src/cybergarage/upnp/cdevice.c
+===================================================================
+--- clinkc.orig/src/cybergarage/upnp/cdevice.c
++++ clinkc/src/cybergarage/upnp/cdevice.c
+@@ -1354,6 +1354,10 @@ BOOL cg_upnp_device_announcefrom(CgUpnpDevice *dev, char *bindAddr)
+ 	CgUpnpSSDPRequest *ssdpReq;
+ 	CgUpnpSSDPSocket *ssdpSock;
+ 	BOOL sentResult;
++	char deviceType[64] = {0};
++	char notifyType[64] = {0};
++	char notifyUUID[64] = {0};
++	char notifyAuth[64] = {0};
+ 	
+ 	cg_log_debug_l4("Entering...\n");
+ 	cg_log_debug_s("Announcing from %s\n", bindAddr);
+@@ -1370,12 +1374,14 @@ BOOL cg_upnp_device_announcefrom(CgUpnpDevice *dev, char *bindAddr)
+ 		cg_upnp_ssdprequest_set_securelocation(ssdpReq, cg_upnp_device_retrieve_securelocationurl(dev, bindAddr, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 
+ 	cg_upnp_ssdprequest_setnts(ssdpReq, CG_UPNP_SSDP_NTS_ALIVE);
+-	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "ssdp:alive\n");
++	sscanf(cg_upnp_device_getdevicetype(dev), "urn:schemas-upnp-org:device:%s", deviceType);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "device:%s ssdp:alive\n", deviceType);
+ 	
+ 	/**** uuid:device-UUID(::upnp:rootdevice) ****/
+ 	if (cg_upnp_device_isrootdevice(dev) == TRUE) {
+ 		cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getnotifydevicent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 		cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getnotifydeviceusn(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
++		sscanf(cg_upnp_device_getnotifydevicent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)), "upnp:%s", notifyAuth);
+ 		cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 		cg_wait(20);
+ 	}
+@@ -1383,12 +1389,15 @@ BOOL cg_upnp_device_announcefrom(CgUpnpDevice *dev, char *bindAddr)
+ 	/**** uuid:device-UUID::urn:schemas-upnp-org:device:deviceType:v ****/
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getnotifydevicetypent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getnotifydevicetypeusn(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
++	sscanf(cg_upnp_device_getnotifydevicetypent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)), "urn:schemas-upnp-org:device:%s", notifyType);
+ 	cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 	cg_wait(20);
+ 
+ 	/**** root or embedded device UUID ****/
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getudn(dev));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getudn(dev));
++	sscanf(cg_upnp_device_getudn(dev), "uuid:%s", notifyUUID);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "%s:%s:%s NOTIFY\n", strcmp("", notifyAuth) ? notifyAuth : "device", notifyUUID, notifyType);
+ 	sentResult = cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 	cg_wait(20);
+ 	
+@@ -1400,7 +1409,7 @@ BOOL cg_upnp_device_announcefrom(CgUpnpDevice *dev, char *bindAddr)
+ 	serviceList = cg_upnp_device_getservicelist(dev);
+ 	for (service=cg_upnp_servicelist_gets(serviceList); service != NULL; service = cg_upnp_service_next(service))
+ 		cg_upnp_service_announcefrom(service, bindAddr);
+-	
++
+ 	/**** child deveices ****/
+ 	devList = cg_upnp_device_getdevicelist(dev);
+ 	for (childDev = cg_upnp_devicelist_gets(devList); childDev != NULL; childDev = cg_upnp_device_next(childDev))
+@@ -1443,11 +1452,16 @@ void cg_upnp_device_announce(CgUpnpDevice *dev)
+ 			continue;
+ 		}
+ #endif
++
+ 		bindAddr = cg_net_interface_getaddress(netIf);
++		
++		zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "============================================================================\n", bindAddr);
++		zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "Announcing from %s\n", bindAddr);
+ 		if (cg_strlen(bindAddr) <= 0)
+ 			continue;
+ 		for (i=0; i<ssdpCount; i++)
+ 		{
++			zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "Announcing %d\n", i + 1);
+ 			cg_upnp_device_announcefrom(dev, bindAddr);
+ 		}
+ 	}
+@@ -1472,29 +1486,38 @@ BOOL cg_upnp_device_byebyefrom(CgUpnpDevice *dev, char *bindAddr)
+ 	CgUpnpSSDPSocket *ssdpSock;
+ 	BOOL sentResult;
+ 
++	char deviceType[64] = {0};
++	char notifyType[64] = {0};
++	char notifyUUID[64] = {0};
++	char notifyAuth[64] = {0};
+ 	cg_log_debug_l4("Entering...\n");
+ 
+ 	ssdpSock = cg_upnp_ssdp_socket_new();
+ 	ssdpReq = cg_upnp_ssdprequest_new();
+ 	
+ 	cg_upnp_ssdprequest_setnts(ssdpReq, CG_UPNP_SSDP_NTS_BYEBYE);
+-	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "ssdp:byebye\n");
++	sscanf(cg_upnp_device_getdevicetype(dev), "urn:schemas-upnp-org:%s", deviceType);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "%s ssdp:byebye\n", deviceType);
+ 
+ 	/**** uuid:device-UUID(::upnp:rootdevice) ****/
+ 	if (cg_upnp_device_isrootdevice(dev) == TRUE) {
+ 		cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getnotifydevicent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 		cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getnotifydeviceusn(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
++		sscanf(cg_upnp_device_getnotifydevicent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)), "upnp:%s", notifyAuth);
+ 		cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 	}
+ 
+ 	/**** uuid:device-UUID::urn:schemas-upnp-org:device:deviceType:v ****/
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getnotifydevicetypent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getnotifydevicetypeusn(dev, ssdpLineBuf, sizeof(ssdpLineBuf)));
++	sscanf(cg_upnp_device_getnotifydevicetypent(dev, ssdpLineBuf, sizeof(ssdpLineBuf)), "urn:schemas-upnp-org:device:%s", notifyType);
+ 	cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 
+ 	/**** root or embedded device UUID ****/
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_device_getudn(dev));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_device_getudn(dev));
++	sscanf(cg_upnp_device_getudn(dev), "uuid:%s", notifyUUID);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "%s:%s:%s NOTIFY\n", strcmp("", notifyAuth) ? notifyAuth : "device", notifyUUID, notifyType);
+ 	sentResult = cg_upnp_ssdp_socket_notifyfrom(ssdpSock, ssdpReq, bindAddr);
+ 
+ 	cg_upnp_ssdprequest_delete(ssdpReq);
+@@ -1547,8 +1570,14 @@ void cg_upnp_device_byebye(CgUpnpDevice *dev)
+ 		bindAddr = cg_net_interface_getaddress(netIf);
+ 		if (cg_strlen(bindAddr) <= 0)
+ 			continue;
++
++		zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "============================================================================\n", bindAddr);
++		zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "byebye from %s\n", bindAddr);
+ 		for (i=0; i<ssdpCount; i++)
++		{
++			zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "byebye %d\n", i + 1);
+ 			cg_upnp_device_byebyefrom(dev, bindAddr);
++		}
+ 	}
+ 
+ 	cg_net_interfacelist_delete(netIfList);
+@@ -1632,7 +1661,7 @@ BOOL cg_upnp_device_postsearchresponse(CgUpnpDevice *dev, CgUpnpSSDPPacket *ssdp
+ BOOL cg_upnp_device_start(CgUpnpDevice *dev)
+ {
+ 	CG_HTTP_LISTENER httpListener;
+-	
++
+ 	cg_log_debug_l4("Entering...\n");
+ 
+ 	cg_upnp_device_stop(dev);
+Index: clinkc/src/cybergarage/upnp/cservice.c
+===================================================================
+--- clinkc.orig/src/cybergarage/upnp/cservice.c
++++ clinkc/src/cybergarage/upnp/cservice.c
+@@ -818,7 +818,7 @@ BOOL cg_upnp_service_announcefrom(CgUpnpService *service, char *bindAddr)
+ 	CgUpnpSSDPRequest *ssdpReq;
+ 	CgUpnpSSDPSocket *ssdpSock;
+ 	BOOL sentResult = TRUE;
+-	
++	char serviceType[64] = {0};
+ 	cg_log_debug_l4("Entering...\n");
+ 
+ 	rootDev = cg_upnp_service_getrootdevice(service);
+@@ -834,7 +834,8 @@ BOOL cg_upnp_service_announcefrom(CgUpnpService *service, char *bindAddr)
+ 		cg_upnp_ssdprequest_set_securelocation(ssdpReq, cg_upnp_device_retrieve_securelocationurl(rootDev, bindAddr, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 
+ 	cg_upnp_ssdprequest_setnts(ssdpReq, CG_UPNP_SSDP_NTS_ALIVE);
+-	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "ssdp:alive\n");
++	sscanf(cg_upnp_service_getnotifyservicetypent(service, ssdpLineBuf, sizeof(ssdpLineBuf)), "urn:schemas-upnp-org:%s", serviceType);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "%s ssdp:alive\n", serviceType);
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_service_getnotifyservicetypent(service, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_service_getnotifyservicetypeusn(service, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 	
+@@ -857,13 +858,15 @@ BOOL cg_upnp_service_byebyefrom(CgUpnpService *service, char *bindAddr)
+ 	CgUpnpSSDPRequest *ssdpReq;
+ 	CgUpnpSSDPSocket *ssdpSock;
+ 	BOOL sentResult;
++	char serviceType[64] = {0};
+ 		
+ 	cg_log_debug_l4("Entering...\n");
+ 
+ 	ssdpReq = cg_upnp_ssdprequest_new();
+ 	
+ 	cg_upnp_ssdprequest_setnts(ssdpReq, CG_UPNP_SSDP_NTS_BYEBYE);
+-	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "ssdp:byebye\n");
++	sscanf(cg_upnp_service_getnotifyservicetypent(service, ssdpLineBuf, sizeof(ssdpLineBuf)), "urn:schemas-upnp-org:%s", serviceType);
++	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "%s ssdp:byebye\n", serviceType);
+ 	cg_upnp_ssdprequest_setnt(ssdpReq, cg_upnp_service_getnotifyservicetypent(service, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 	cg_upnp_ssdprequest_setusn(ssdpReq, cg_upnp_service_getnotifyservicetypeusn(service, ssdpLineBuf, sizeof(ssdpLineBuf)));
+ 
+Index: clinkc/src/cybergarage/upnp/ssdp/cssdp_socket.c
+===================================================================
+--- clinkc.orig/src/cybergarage/upnp/ssdp/cssdp_socket.c
++++ clinkc/src/cybergarage/upnp/ssdp/cssdp_socket.c
+@@ -38,7 +38,6 @@ static BOOL cg_upnp_ssdp_socket_notify(CgUpnpSSDPSocket *ssdpSock, CgUpnpSSDPReq
+ 	cg_log_debug_l4("Entering...\n");
+ 
+ 	cg_upnp_ssdprequest_setmethod(ssdpReq, CG_HTTP_NOTIFY);
+-	zcfgLogPrefix(ZCFG_LOG_NOTICE, ZCFG_LOGPRE_UPNP, "NOTIFY\n");
+ 	
+ 	ssdpMsg = cg_string_new();
+ 	cg_upnp_ssdprequest_tostring(ssdpReq, ssdpMsg);

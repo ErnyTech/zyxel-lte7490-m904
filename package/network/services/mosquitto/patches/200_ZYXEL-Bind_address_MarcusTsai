@@ -1,0 +1,74 @@
+diff -uNr mosquitto-1.6.7/lib/net_mosq.c mosquitto-1.6.7_new/lib/net_mosq.c
+--- mosquitto-1.6.7/lib/net_mosq.c	2019-09-25 19:18:26.000000000 +0800
++++ mosquitto-1.6.7_new/lib/net_mosq.c	2020-01-09 17:54:10.482677400 +0800
+@@ -70,6 +70,12 @@
+ #include "time_mosq.h"
+ #include "util_mosq.h"
+ 
++//#ifdef ZYXEL_MQTT_PUBLISHER
++#if 1
++#include <net/if.h>
++#include <ifaddrs.h>
++#endif
++
+ #ifdef WITH_TLS
+ int tls_ex_index_mosq = -1;
+ UI_METHOD *_ui_method = NULL;
+@@ -374,6 +380,13 @@
+ #ifdef WIN32
+ 	uint32_t val = 1;
+ #endif
++//#ifdef ZYXEL_MQTT_PUBLISHER
++#if 1
++	struct ifreq boundIf;
++	struct ifaddrs *ifaddr = NULL, *ifa = NULL;
++	int ret = 0, findWanIf = 0;
++	char host_address[NI_MAXHOST] = {0};
++#endif
+ 
+ 	*sock = INVALID_SOCKET;
+ 	memset(&hints, 0, sizeof(struct addrinfo));
+@@ -410,6 +423,43 @@
+ 		}
+ 
+ 		if(bind_address){
++//#ifdef ZYXEL_MQTT_PUBLISHER
++#if 1
++			if (getifaddrs(&ifaddr) != -1) {
++				for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
++					if (ifa->ifa_addr == NULL || ( ifa->ifa_addr->sa_family != AF_INET && ifa->ifa_addr->sa_family != AF_INET6)) continue;
++					ret = getnameinfo(ifa->ifa_addr,((ifa->ifa_addr)->sa_family == AF_INET) ? sizeof(struct sockaddr_in) :sizeof(struct sockaddr_in6),host_address, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
++					if(ret == 0){
++						if(strcmp(bind_address, host_address) == 0){
++							//printf("%s:%s(%d) Bind Address %s matched interface %s.\n", __FILE__, __func__, __LINE__, bind_address, ifa->ifa_name);
++							snprintf(boundIf.ifr_name, IFNAMSIZ, "%s", ifa->ifa_name);
++							findWanIf = 1;
++							break;
++						}
++					}
++					else{
++						printf("[Error]%s:%s(%d) getnameinfo failed.(%s)\n", __FILE__, __func__, __LINE__, ifa->ifa_name);
++					}
++					
++				}
++				if(findWanIf){
++					ret = setsockopt(*sock, SOL_SOCKET, SO_BINDTODEVICE, (char *)&boundIf,  sizeof(boundIf));
++					if(ret != 0){
++						printf("[Error] Set socket option(SO_BINDTODEVICE) failed (%d).\n", ret);
++					}
++				}
++				else{
++					printf("[Error] %s:%s(%d) Can not find address(%s) interface. Bind failed.\n", __FILE__, __func__, __LINE__, bind_address);
++				}
++				if(ifaddr != NULL){
++					freeifaddrs(ifaddr);
++				}
++			}
++			else{
++				printf("[Error] %s:%S:(%d) getifaddrs() failed.\n", __FILE__, __func__, __LINE__);
++			}
++#endif
++
+ 			for(rp_bind = ainfo_bind; rp_bind != NULL; rp_bind = rp_bind->ai_next){
+ 				if(bind(*sock, rp_bind->ai_addr, rp_bind->ai_addrlen) == 0){
+ 					break;

@@ -1,0 +1,21 @@
+diff -urN busybox-1_20_1.orig/init/init.c busybox-1_20_1/init/init.c
+--- busybox-1_20_1.orig/init/init.c	2021-09-09 10:42:35.950707134 +0800
++++ busybox-1_20_1/init/init.c	2021-09-10 07:59:19.212719529 +0800
+@@ -1250,7 +1250,7 @@
+ 	 */
+ 	die_sleep = 30 * 24*60*60;
+ 
+-#if defined(PLATFORM_ECONET) || defined(TARGET_econet)
++#if defined(PLATFORM_ECONET) || defined(TARGET_econet) || defined(TARGET_ramips)
+ 	/*20100921_serena_modify*/
+ 	/* to_cpuset(bb_xgetularg_bnd(aff, 16, 1, ULONG_MAX),* &new_mask); */
+ 	printf("busybox init and set aff\n");
+@@ -1263,6 +1263,8 @@
+ #endif
+ #ifdef TARGET_econet
+     aff = 0x1;
++#else	
++    aff = 0x3;
+ #endif
+ 	cpu_set_t new_mask;
+ 	CPU_ZERO(&new_mask);

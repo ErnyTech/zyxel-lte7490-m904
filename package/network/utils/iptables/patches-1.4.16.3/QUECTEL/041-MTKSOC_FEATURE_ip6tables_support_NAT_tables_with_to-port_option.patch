@@ -1,0 +1,350 @@
+diff -urN iptables-1.4.16.3_org/extensions/libip6t_MASQUERADE.c iptables-1.4.16.3/extensions/libip6t_MASQUERADE.c
+--- iptables-1.4.16.3_org/extensions/libip6t_MASQUERADE.c	1970-01-01 08:00:00.000000000 +0800
++++ iptables-1.4.16.3/extensions/libip6t_MASQUERADE.c	2019-08-26 20:33:24.281911841 +0800
+@@ -0,0 +1,150 @@
++/*
++ * Copyright (c) 2011 Patrick McHardy <kaber@trash.net>
++ *
++ * Based on Rusty Russell's IPv4 MASQUERADE target. Development of IPv6 NAT
++ * funded by Astaro.
++ */
++
++#include <stdio.h>
++#include <netdb.h>
++#include <string.h>
++#include <stdlib.h>
++#include <getopt.h>
++#include <xtables.h>
++#include <limits.h> /* INT_MAX in ip_tables.h */
++#include <linux/netfilter_ipv6/ip6_tables.h>
++#include <linux/netfilter/nf_nat.h>
++
++enum {
++	O_TO_PORTS = 0,
++	O_RANDOM,
++};
++
++static void MASQUERADE_help(void)
++{
++	printf(
++"MASQUERADE target options:\n"
++" --to-ports <port>[-<port>]\n"
++"				Port (range) to map to.\n"
++" --random\n"
++"				Randomize source port.\n");
++}
++
++static const struct xt_option_entry MASQUERADE_opts[] = {
++	{.name = "to-ports", .id = O_TO_PORTS, .type = XTTYPE_STRING},
++	{.name = "random", .id = O_RANDOM, .type = XTTYPE_NONE},
++	XTOPT_TABLEEND,
++};
++
++/* Parses ports */
++static void
++parse_ports(const char *arg, struct nf_nat_range *r)
++{
++	char *end;
++	unsigned int port, maxport;
++
++	r->flags |= NF_NAT_RANGE_PROTO_SPECIFIED;
++
++	if (!xtables_strtoui(arg, &end, &port, 0, UINT16_MAX))
++		xtables_param_act(XTF_BAD_VALUE, "MASQUERADE", "--to-ports", arg);
++
++	switch (*end) {
++	case '\0':
++		r->min_proto.tcp.port
++			= r->max_proto.tcp.port
++			= htons(port);
++		return;
++	case '-':
++		if (!xtables_strtoui(end + 1, NULL, &maxport, 0, UINT16_MAX))
++			break;
++
++		if (maxport < port)
++			break;
++
++		r->min_proto.tcp.port = htons(port);
++		r->max_proto.tcp.port = htons(maxport);
++		return;
++	default:
++		break;
++	}
++	xtables_param_act(XTF_BAD_VALUE, "MASQUERADE", "--to-ports", arg);
++}
++
++static void MASQUERADE_parse(struct xt_option_call *cb)
++{
++	const struct ip6t_entry *entry = cb->xt_entry;
++	struct nf_nat_range *r = cb->data;
++	int portok;
++
++	if (entry->ipv6.proto == IPPROTO_TCP ||
++	    entry->ipv6.proto == IPPROTO_UDP ||
++	    entry->ipv6.proto == IPPROTO_SCTP ||
++	    entry->ipv6.proto == IPPROTO_DCCP ||
++	    entry->ipv6.proto == IPPROTO_ICMP)
++		portok = 1;
++	else
++		portok = 0;
++
++	xtables_option_parse(cb);
++	switch (cb->entry->id) {
++	case O_TO_PORTS:
++		if (!portok)
++			xtables_error(PARAMETER_PROBLEM,
++				   "Need TCP, UDP, SCTP or DCCP with port specification");
++		parse_ports(cb->arg, r);
++		break;
++	case O_RANDOM:
++		r->flags |=  NF_NAT_RANGE_PROTO_RANDOM;
++		break;
++	}
++}
++
++static void
++MASQUERADE_print(const void *ip, const struct xt_entry_target *target,
++                 int numeric)
++{
++	const struct nf_nat_range *r = (const void *)target->data;
++
++	if (r->flags & NF_NAT_RANGE_PROTO_SPECIFIED) {
++		printf(" masq ports: ");
++		printf("%hu", ntohs(r->min_proto.tcp.port));
++		if (r->max_proto.tcp.port != r->min_proto.tcp.port)
++			printf("-%hu", ntohs(r->max_proto.tcp.port));
++	}
++
++	if (r->flags & NF_NAT_RANGE_PROTO_RANDOM)
++		printf(" random");
++}
++
++static void
++MASQUERADE_save(const void *ip, const struct xt_entry_target *target)
++{
++	const struct nf_nat_range *r = (const void *)target->data;
++
++	if (r->flags & NF_NAT_RANGE_PROTO_SPECIFIED) {
++		printf(" --to-ports %hu", ntohs(r->min_proto.tcp.port));
++		if (r->max_proto.tcp.port != r->min_proto.tcp.port)
++			printf("-%hu", ntohs(r->max_proto.tcp.port));
++	}
++
++	if (r->flags & NF_NAT_RANGE_PROTO_RANDOM)
++		printf(" --random");
++}
++
++static struct xtables_target masquerade_tg_reg = {
++	.name		= "MASQUERADE",
++	.version	= XTABLES_VERSION,
++	.family		= NFPROTO_IPV6,
++	.size		= XT_ALIGN(sizeof(struct nf_nat_range)),
++	.userspacesize	= XT_ALIGN(sizeof(struct nf_nat_range)),
++	.help		= MASQUERADE_help,
++	.x6_parse	= MASQUERADE_parse,
++	.print		= MASQUERADE_print,
++	.save		= MASQUERADE_save,
++	.x6_options	= MASQUERADE_opts,
++};
++
++void _init(void)
++{
++	xtables_register_target(&masquerade_tg_reg);
++}
+diff -urN iptables-1.4.16.3_org/extensions/libip6t_REDIRECT.c iptables-1.4.16.3/extensions/libip6t_REDIRECT.c
+--- iptables-1.4.16.3_org/extensions/libip6t_REDIRECT.c	1970-01-01 08:00:00.000000000 +0800
++++ iptables-1.4.16.3/extensions/libip6t_REDIRECT.c	2019-08-26 20:33:24.285911841 +0800
+@@ -0,0 +1,151 @@
++/*
++ * Copyright (c) 2011 Patrick McHardy <kaber@trash.net>
++ *
++ * Based on Rusty Russell's IPv4 REDIRECT target. Development of IPv6 NAT
++ * funded by Astaro.
++ */
++
++#include <stdio.h>
++#include <string.h>
++#include <stdlib.h>
++#include <xtables.h>
++#include <limits.h> /* INT_MAX in ip_tables.h */
++#include <linux/netfilter_ipv6/ip6_tables.h>
++#include <linux/netfilter/nf_nat.h>
++
++enum {
++	O_TO_PORTS = 0,
++	O_RANDOM,
++	F_TO_PORTS = 1 << O_TO_PORTS,
++	F_RANDOM   = 1 << O_RANDOM,
++};
++
++static void REDIRECT_help(void)
++{
++	printf(
++"REDIRECT target options:\n"
++" --to-ports <port>[-<port>]\n"
++"				Port (range) to map to.\n"
++" [--random]\n");
++}
++
++static const struct xt_option_entry REDIRECT_opts[] = {
++	{.name = "to-ports", .id = O_TO_PORTS, .type = XTTYPE_STRING},
++	{.name = "random", .id = O_RANDOM, .type = XTTYPE_NONE},
++	XTOPT_TABLEEND,
++};
++
++/* Parses ports */
++static void
++parse_ports(const char *arg, struct nf_nat_range *range)
++{
++	char *end = "";
++	unsigned int port, maxport;
++
++	range->flags |= NF_NAT_RANGE_PROTO_SPECIFIED;
++
++	if (!xtables_strtoui(arg, &end, &port, 0, UINT16_MAX) &&
++	    (port = xtables_service_to_port(arg, NULL)) == (unsigned)-1)
++		xtables_param_act(XTF_BAD_VALUE, "REDIRECT", "--to-ports", arg);
++
++	switch (*end) {
++	case '\0':
++		range->min_proto.tcp.port
++			= range->max_proto.tcp.port
++			= htons(port);
++		return;
++	case '-':
++		if (!xtables_strtoui(end + 1, NULL, &maxport, 0, UINT16_MAX) &&
++		    (maxport = xtables_service_to_port(end + 1, NULL)) == (unsigned)-1)
++			break;
++
++		if (maxport < port)
++			break;
++
++		range->min_proto.tcp.port = htons(port);
++		range->max_proto.tcp.port = htons(maxport);
++		return;
++	default:
++		break;
++	}
++	xtables_param_act(XTF_BAD_VALUE, "REDIRECT", "--to-ports", arg);
++}
++
++static void REDIRECT_parse(struct xt_option_call *cb)
++{
++	const struct ip6t_entry *entry = cb->xt_entry;
++	struct nf_nat_range *range = (void *)(*cb->target)->data;
++	int portok;
++
++	if (entry->ipv6.proto == IPPROTO_TCP
++	    || entry->ipv6.proto == IPPROTO_UDP
++	    || entry->ipv6.proto == IPPROTO_SCTP
++	    || entry->ipv6.proto == IPPROTO_DCCP
++	    || entry->ipv6.proto == IPPROTO_ICMP)
++		portok = 1;
++	else
++		portok = 0;
++
++	xtables_option_parse(cb);
++	switch (cb->entry->id) {
++	case O_TO_PORTS:
++		if (!portok)
++			xtables_error(PARAMETER_PROBLEM,
++				   "Need TCP, UDP, SCTP or DCCP with port specification");
++		parse_ports(cb->arg, range);
++		if (cb->xflags & F_RANDOM)
++			range->flags |= NF_NAT_RANGE_PROTO_RANDOM;
++		break;
++	case O_RANDOM:
++		if (cb->xflags & F_TO_PORTS)
++			range->flags |= NF_NAT_RANGE_PROTO_RANDOM;
++		break;
++	}
++}
++
++static void REDIRECT_print(const void *ip, const struct xt_entry_target *target,
++                           int numeric)
++{
++	const struct nf_nat_range *range = (const void *)target->data;
++
++	if (range->flags & NF_NAT_RANGE_PROTO_SPECIFIED) {
++		printf(" redir ports ");
++		printf("%hu", ntohs(range->min_proto.tcp.port));
++		if (range->max_proto.tcp.port != range->min_proto.tcp.port)
++			printf("-%hu", ntohs(range->max_proto.tcp.port));
++		if (range->flags & NF_NAT_RANGE_PROTO_RANDOM)
++			printf(" random");
++	}
++}
++
++static void REDIRECT_save(const void *ip, const struct xt_entry_target *target)
++{
++	const struct nf_nat_range *range = (const void *)target->data;
++
++	if (range->flags & NF_NAT_RANGE_PROTO_SPECIFIED) {
++		printf(" --to-ports ");
++		printf("%hu", ntohs(range->min_proto.tcp.port));
++		if (range->max_proto.tcp.port != range->min_proto.tcp.port)
++			printf("-%hu", ntohs(range->max_proto.tcp.port));
++		if (range->flags & NF_NAT_RANGE_PROTO_RANDOM)
++			printf(" --random");
++	}
++}
++
++static struct xtables_target redirect_tg_reg = {
++	.name		= "REDIRECT",
++	.version	= XTABLES_VERSION,
++	.family		= NFPROTO_IPV6,
++	.size		= XT_ALIGN(sizeof(struct nf_nat_range)),
++	.userspacesize	= XT_ALIGN(sizeof(struct nf_nat_range)),
++	.help		= REDIRECT_help,
++	.x6_parse	= REDIRECT_parse,
++	.print		= REDIRECT_print,
++	.save		= REDIRECT_save,
++	.x6_options	= REDIRECT_opts,
++};
++
++void _init(void)
++{
++	xtables_register_target(&redirect_tg_reg);
++}
+diff -urN iptables-1.4.16.3_org/include/linux/netfilter/nf_nat.h iptables-1.4.16.3/include/linux/netfilter/nf_nat.h
+--- iptables-1.4.16.3_org/include/linux/netfilter/nf_nat.h	1970-01-01 08:00:00.000000000 +0800
++++ iptables-1.4.16.3/include/linux/netfilter/nf_nat.h	2019-08-26 20:33:24.285911841 +0800
+@@ -0,0 +1,37 @@
++#ifndef _NETFILTER_NF_NAT_H
++#define _NETFILTER_NF_NAT_H
++
++#include <linux/netfilter.h>
++#ifdef MTKSOC_IP6TABLES_NAT_SUPPORT
++#include <net/netfilter/nf_conntrack_tuple.h>
++#else
++#include <linux/netfilter/nf_conntrack_tuple_common.h>
++#endif
++
++#define NF_NAT_RANGE_MAP_IPS		1
++#define NF_NAT_RANGE_PROTO_SPECIFIED	2
++#define NF_NAT_RANGE_PROTO_RANDOM	4
++#define NF_NAT_RANGE_PERSISTENT		8
++
++struct nf_nat_ipv4_range {
++	unsigned int			flags;
++	__be32				min_ip;
++	__be32				max_ip;
++	union nf_conntrack_man_proto	min;
++	union nf_conntrack_man_proto	max;
++};
++
++struct nf_nat_ipv4_multi_range_compat {
++	unsigned int			rangesize;
++	struct nf_nat_ipv4_range	range[1];
++};
++
++struct nf_nat_range {
++	unsigned int			flags;
++	union nf_inet_addr		min_addr;
++	union nf_inet_addr		max_addr;
++	union nf_conntrack_man_proto	min_proto;
++	union nf_conntrack_man_proto	max_proto;
++};
++
++#endif /* _NETFILTER_NF_NAT_H */

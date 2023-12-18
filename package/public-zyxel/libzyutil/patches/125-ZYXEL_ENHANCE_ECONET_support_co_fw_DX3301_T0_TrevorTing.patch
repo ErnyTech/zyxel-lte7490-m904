@@ -1,0 +1,60 @@
+Index: libzyutil-1.0/zyutil_cofw.c
+===================================================================
+--- libzyutil-1.0.orig/zyutil_cofw.c	2020-05-22 19:45:28.000000000 +0800
++++ libzyutil-1.0/zyutil_cofw.c	2020-05-22 19:52:48.110805797 +0800
+@@ -63,18 +63,26 @@
+ 		}else if (strstr(modelName,"EX5301-B0") != NULL){
+ 			return MODEL_EX5301_B0;
+ 		}else if (strstr(modelName,"DX5301-B1") != NULL){
+-                        return MODEL_DX5301_B1;
+-                }else if (strstr(modelName,"EX5301-B1") != NULL){
+-                        return MODEL_EX5301_B1;
+-                }else if (strstr(modelName,"DX5301-B2") != NULL){
+-                        return MODEL_DX5301_B2;
+-                }else if (strstr(modelName,"EX5301-B2") != NULL){
+-                        return MODEL_EX5301_B2;
+-                }else if (strstr(modelName,"DX5301-B3") != NULL){
+-                        return MODEL_DX5301_B3;
+-                }else if (strstr(modelName,"EX5301-B3") != NULL){
+-                        return MODEL_EX5301_B3;
+-                }
++			return MODEL_DX5301_B1;
++		}else if (strstr(modelName,"EX5301-B1") != NULL){
++			return MODEL_EX5301_B1;
++		}else if (strstr(modelName,"DX5301-B2") != NULL){
++			return MODEL_DX5301_B2;
++		}else if (strstr(modelName,"EX5301-B2") != NULL){
++			return MODEL_EX5301_B2;
++		}else if (strstr(modelName,"DX5301-B3") != NULL){
++			return MODEL_DX5301_B3;
++		}else if (strstr(modelName,"EX5301-B3") != NULL){
++			return MODEL_EX5301_B3;
++		}else if (strstr(modelName,"DX3301-T0") != NULL){
++		   	return MODEL_DX3301_T0;
++		}else if (strstr(modelName,"EX3301-T0") != NULL){
++			return MODEL_EX3301_T0;
++		}else if (strstr(modelName,"DX3300-T0") != NULL){
++			return MODEL_DX3300_T0;
++		}else if (strstr(modelName,"EX3300-T0") != NULL){
++			return MODEL_EX3300_T0;
++		}
+ 	}
+ 
+ 	return MODEL_UNDEFINED;
+Index: libzyutil-1.0/zyutil_cofw.h
+===================================================================
+--- libzyutil-1.0.orig/zyutil_cofw.h	2020-05-22 19:45:28.000000000 +0800
++++ libzyutil-1.0/zyutil_cofw.h	2020-05-22 19:49:43.388713417 +0800
+@@ -32,7 +32,11 @@
+     MODEL_DX5301_B2,
+     MODEL_EX5301_B2,
+     MODEL_DX5301_B3,
+-    MODEL_EX5301_B3
++    MODEL_EX5301_B3,
++    MODEL_DX3301_T0,
++    MODEL_EX3301_T0,
++    MODEL_DX3300_T0,
++    MODEL_EX3300_T0
+ } model_name_t;
+ 
+ /*!

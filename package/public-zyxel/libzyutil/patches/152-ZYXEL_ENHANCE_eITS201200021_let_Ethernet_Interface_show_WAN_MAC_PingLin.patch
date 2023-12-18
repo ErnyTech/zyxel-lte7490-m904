@@ -1,0 +1,401 @@
+Index: libzyutil-1.0/libzyutil_wrapper.h
+===================================================================
+--- libzyutil-1.0.orig/libzyutil_wrapper.h	2021-01-08 18:18:47.011166790 +0800
++++ libzyutil-1.0/libzyutil_wrapper.h	2021-01-08 18:18:47.023166790 +0800
+@@ -16,8 +16,10 @@
+ 
+ #define zyUtilIGetSerailNum zyUtilIGetSerialNumber
+ zcfgRet_t zyUtilIGetBaseMAC(char *mac);
++zcfgRet_t zyUtilIGetBaseMACwithColon(char *mac);
+ zcfgRet_t zyUtilIGetNumberOfMAC(int *num);
+ zcfgRet_t zyUtilIGetNthMAC(char *mac, int nth);
++zcfgRet_t zyUtilIGetNthMACwithColon(char *mac, int nth);
+ zcfgRet_t zyUtilIGetModelID(char *model_id);
+ zcfgRet_t zyUtilIGetProductName(char *pdname);
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion);
+Index: libzyutil-1.0/zyutil.h
+===================================================================
+--- libzyutil-1.0.orig/zyutil.h	2021-01-08 18:18:46.923166794 +0800
++++ libzyutil-1.0/zyutil.h	2021-01-08 18:18:47.023166790 +0800
+@@ -24,7 +24,6 @@
+ int32_t zyUtilOidGet(const char *objNameAbbr);
+ int zyUtilReadPidfile(char *pidFile);
+ 
+-zcfgRet_t zyUtilIGetBaseMACwithColon(char *mac);
+ zcfgRet_t zyUtilMacStrToNum(const char *, uint8_t *);
+ zcfgRet_t zyUtilMacNumToStr(const uint8_t *, char *);
+ int zyUtilGetGPIO(int gpioNum);
+Index: libzyutil-1.0/BROADCOM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/BROADCOM/libzyutil_wrapper.c	2021-01-08 18:18:47.011166790 +0800
++++ libzyutil-1.0/BROADCOM/libzyutil_wrapper.c	2021-01-08 18:19:51.895083409 +0800
+@@ -63,10 +63,12 @@
+ 
+     return ZCFG_SUCCESS;
+ }
++
+ int zyGetSupervisorPWDMaxLength(void){
+ 	return NVRAM_SUPER_PWD_LEN;
+ }
+ #endif
++
+ int zyGetAdminPWD(char *buf, int len){
+     NVRAM_DATA nvramData;
+     int _string_len=0;
+@@ -101,9 +103,11 @@
+ 
+     return ZCFG_SUCCESS;
+ }
++
+ int zyGetAdminPWDMaxLength(void){
+ 	return NVRAM_ADMIN_PWD_LEN;
+ }
++
+ int zyGetPSK(char *buf, int len){
+     NVRAM_DATA nvramData;
+     int _string_len=0;
+@@ -138,6 +142,7 @@
+ 
+     return ZCFG_SUCCESS;
+ }
++
+ int zyGetPSKMaxLength(void){
+ 	return NVRAM_KEYPASSPHRASE_LEN;
+ }
+@@ -151,18 +156,18 @@
+ 	zcfgRet_t ret = ZCFG_SUCCESS;
+ 
+ 	if(ifName == NULL) {
+-        zcfgLog(ZCFG_LOG_ERR, "%s : Cannot bring up NULL interface\n", __FUNCTION__);
++		zcfgLog(ZCFG_LOG_ERR, "%s : Cannot bring up NULL interface\n", __FUNCTION__);
+ 		ret = ZCFG_INTERNAL_ERROR;
+ 	}
+ 	else {
+ 		/* Create a channel to the NET kernel. */
+ 		if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+-            zcfgLog(ZCFG_LOG_ERR, "%s : Cannot create socket to the NET kernel\n", __FUNCTION__);
++			zcfgLog(ZCFG_LOG_ERR, "%s : Cannot create socket to the NET kernel\n", __FUNCTION__);
+ 			ret = ZCFG_INTERNAL_ERROR;
+ 		}
+ 		else {
+ 			strncpy(ifr.ifr_name, ifName, IFNAMSIZ);
+-            // get interface flags
++			// get interface flags
+ 			if(ioctl(sockfd, SIOCGIFFLAGS, &ifr) != -1) {
+ 				if(up)
+ 					ifr.ifr_flags |= IFF_UP;
+@@ -327,7 +332,7 @@
+ 	}
+ 
+ #else //defined(BCM_SDK_502L05) || defined(BCM_SDK_502L06)
+-    printf("zyFwInfoNonBootGet() only support BRCM SDK 502L05, you need to add version check in this API\n");
++	printf("zyFwInfoNonBootGet() only support BRCM SDK 502L05, you need to add version check in this API\n");
+ #endif //defined(BCM_SDK_502L05) || defined(BCM_SDK_502L06)
+ 	return 0;
+ }
+@@ -355,13 +360,13 @@
+ 	if(nvramDataGet(&nvramData) < 0)
+ 		return ZCFG_INTERNAL_ERROR;
+ 
+-        sprintf(mac ,"%02X%02X%02X%02X%02X%02X",
+-			nvramData.ucaBaseMacAddr[0],
+-			nvramData.ucaBaseMacAddr[1],
+-        	nvramData.ucaBaseMacAddr[2],
+-        	nvramData.ucaBaseMacAddr[3],
+-        	nvramData.ucaBaseMacAddr[4],
+-        	nvramData.ucaBaseMacAddr[5]
++	sprintf(mac ,"%02X%02X%02X%02X%02X%02X",
++		nvramData.ucaBaseMacAddr[0],
++		nvramData.ucaBaseMacAddr[1],
++		nvramData.ucaBaseMacAddr[2],
++		nvramData.ucaBaseMacAddr[3],
++		nvramData.ucaBaseMacAddr[4],
++		nvramData.ucaBaseMacAddr[5]
+ 	);
+ 	return ZCFG_SUCCESS;
+ }
+@@ -375,13 +380,13 @@
+ 	if(nvramDataGet(&nvramData) < 0)
+ 		return ZCFG_INTERNAL_ERROR;
+ 
+-        sprintf(mac ,"%02X:%02X:%02X:%02X:%02X:%02X",
+-			nvramData.ucaBaseMacAddr[0],
+-			nvramData.ucaBaseMacAddr[1],
+-        	nvramData.ucaBaseMacAddr[2],
+-        	nvramData.ucaBaseMacAddr[3],
+-        	nvramData.ucaBaseMacAddr[4],
+-        	nvramData.ucaBaseMacAddr[5]
++	sprintf(mac ,"%02X:%02X:%02X:%02X:%02X:%02X",
++		nvramData.ucaBaseMacAddr[0],
++		nvramData.ucaBaseMacAddr[1],
++		nvramData.ucaBaseMacAddr[2],
++		nvramData.ucaBaseMacAddr[3],
++		nvramData.ucaBaseMacAddr[4],
++		nvramData.ucaBaseMacAddr[5]
+ 	);
+ 	return ZCFG_SUCCESS;
+ }
+@@ -427,6 +432,38 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilIGetNthMACwithColon(char *mac, int nth)
++{
++	unsigned long macsequence = 0;
++	unsigned char pucaMacAddr[NVRAM_MAC_ADDRESS_LEN]={0};
++	NVRAM_DATA nvramData;
++
++	memset(&nvramData, 0, sizeof(NVRAM_DATA));
++
++	if(nvramDataGet(&nvramData) < 0)
++		return ZCFG_INTERNAL_ERROR;
++
++	/* Start with the base address */
++	memcpy( pucaMacAddr, nvramData.ucaBaseMacAddr, NVRAM_MAC_ADDRESS_LEN);
++
++	/* Work with only least significant three bytes of base MAC address */
++	macsequence = (pucaMacAddr[3] << 16) | (pucaMacAddr[4] << 8) | pucaMacAddr[5];
++	macsequence = (macsequence + nth) & 0xffffff;
++	pucaMacAddr[3] = (macsequence >> 16) & 0xff;
++	pucaMacAddr[4] = (macsequence >> 8) & 0xff;
++	pucaMacAddr[5] = (macsequence ) & 0xff;
++
++	sprintf(mac ,"%02X:%02X:%02X:%02X:%02X:%02X",
++		pucaMacAddr[0],
++		pucaMacAddr[1],
++		pucaMacAddr[2],
++		pucaMacAddr[3],
++		pucaMacAddr[4],
++		pucaMacAddr[5]
++	);
++	return ZCFG_SUCCESS;
++}
++
+ zcfgRet_t zyUtilIGetNumberOfMAC(int *num)
+ {
+ 	NVRAM_DATA nvramData;
+@@ -436,7 +473,7 @@
+ 	if(nvramDataGet(&nvramData) < 0)
+ 		return ZCFG_INTERNAL_ERROR;
+ 
+-    if(num) *num =  nvramData.ulNumMacAddrs;
++	if(num) *num = nvramData.ulNumMacAddrs;
+ 	return ZCFG_SUCCESS;
+ }
+ 
+@@ -449,7 +486,7 @@
+ 	if(nvramDataGet(&nvramData) < 0)
+ 		return ZCFG_INTERNAL_ERROR;
+ 
+-    memcpy(model_id, nvramData.FeatureBits, 4);
++	memcpy(model_id, nvramData.FeatureBits, 4);
+ 	return ZCFG_SUCCESS;
+ }
+ 
+@@ -486,7 +523,7 @@
+ #if defined(ZYPRJ_VMG3926) && defined(SAME_FW_FOR_TWO_BOARD) && defined(BCM_SDK_416L05)
+ {
+     FILE *fp = NULL;
+-    char str[NVRAM_BOARD_ID_STRING_LEN];
++    char str[NVRAM_BOARD_ID_STRING_LEN] = {0};
+ 
+     fp = fopen(PROC_NVRAM_BOARDID, "r");
+     if ( !fp )
+@@ -522,10 +559,9 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
+-
+ zcfgRet_t zyUtilIGetDSLVersion(char *DSLversion)
+ {
+-	char buf[64];
++	char buf[64] = {0};
+ 	char sysCmd[1024] = {0};
+ 	FILE *fp = NULL;
+ 	char *action = NULL;
+@@ -548,7 +584,6 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
+-
+ zcfgRet_t zyUtilIGetFirmwareVersion(char *fwversion)
+ {
+ 	ZY_FW_INFO zyFwInfoData;
+@@ -636,8 +671,6 @@
+ 	return ret;
+ }
+ 
+-
+-
+ zcfgRet_t zyUtilIGetDefaultGponSnPw(char *serianumber, char *password)
+ {
+ 	NVRAM_DATA nvramData;
+@@ -651,7 +684,7 @@
+ 		strcpy(serianumber, nvramData.gponSerialNumber);
+ 	if(password != NULL)
+ 		strcpy(password, nvramData.gponPassword);
+-	
++
+ 	return ZCFG_SUCCESS;
+ }
+ 
+@@ -659,7 +692,7 @@
+ #if defined(ZYXEL_BOARD_DETECT_BY_GPIO) && defined(ZYXEL_SUPPORT_RDPAWAN_CONFIGURE)
+ int zyUtilISetScratchPadSetting(const char *key, const void *buf, int bufLen)
+ {
+-	char *currBuf;
++	char *currBuf = NULL;
+ 	int count;
+ 	int rc;
+ 
+@@ -674,7 +707,7 @@
+ 	* Check if the new data is the same as the old data.
+ 	*/
+ 	count = boardIoctl(BOARD_IOCTL_FLASH_READ, SCRATCH_PAD,
+-	               (char *) key, 0, bufLen, currBuf);
++		(char *) key, 0, bufLen, currBuf);
+ 
+ 	if (count == bufLen)
+ 	{
+@@ -690,7 +723,7 @@
+ 		ZOS_FREE(currBuf);
+ 
+ 	rc = boardIoctl(BOARD_IOCTL_FLASH_WRITE, SCRATCH_PAD, (char *) key, 0, bufLen, (char *) buf);
+-				printf("%s %d: rc:%d\n", __FUNCTION__, __LINE__, rc);
++	printf("%s %d: rc:%d\n", __FUNCTION__, __LINE__, rc);
+ 
+ 	if (rc < 0)
+ 	{
+@@ -700,6 +733,7 @@
+ 	return ZCFG_SUCCESS;
+ }
+ #endif
++
+ zcfgRet_t zyUtilIGetScratchPadSetting(char *psp_wantype, char *psp_wanrate)
+ {
+     int rc;
+@@ -729,8 +763,6 @@
+ }
+ #endif
+ 
+-
+-
+ #if defined(ABUU_CUSTOMIZATION) //IChiaHuang 20200323
+ //LED control for different products, added here
+ #if defined(ZYPRJ_DX3201_B0)
+@@ -959,6 +991,7 @@
+ {
+ 	boardIoctl(BOARD_IOCTL_LED_CTRL, 0, NULL, ledType, state, NULL);
+ }
++
+ int32_t  get_BrcmLedIndex(ZYLED_INDEX index) {
+ 	int32_t LEDindex;
+ 	switch(index) {
+@@ -999,6 +1032,7 @@
+ 	}
+ 	return LEDindex;
+ }
++
+ int32_t  get_BrcmLedState(ZYLED_ACTION action, ZYLED_RATE blink_rate) {
+ 	int32_t state = 0;
+ 	switch(action) {
+@@ -1029,6 +1063,7 @@
+ 	}
+ 	return state;
+ }
++
+ zcfgRet_t zyUtilSetSoftwareLedState(ZYLED_INDEX index ,ZYLED_ACTION action, ZYLED_RATE blink_rate)
+ {
+ 
+@@ -1036,6 +1071,7 @@
+ 	return ZCFG_SUCCESS;
+ }
+ #endif
++
+ int boardIoctl(int board_ioctl, BOARD_IOCTL_ACTION action, char *string, int strLen, int offset, char *buf)
+ {
+     BOARD_IOCTL_PARMS IoctlParms;
+@@ -1069,10 +1105,10 @@
+ 	BOARD_MEMACCESS_IOCTL_PARMS parms;
+ 	int fd;
+ 
+-    if ((fd = open (BOARD_DEVICE_NAME, O_RDWR)) < 0)
+-    {
+-        printf ("Can't open /dev/brcmboard ");
+-    }
++	if ((fd = open (BOARD_DEVICE_NAME, O_RDWR)) < 0)
++	{
++		printf ("Can't open /dev/brcmboard ");
++	}
+ 
+ 	parms.address = (void *)addr;
+ 	parms.size = siz;
+@@ -1147,7 +1183,7 @@
+ 
+ 	if (uploadfilename == NULL)
+ 	{
+-	    zyutil_dbg_printf("ERROR : uploadfilename == NULL\n");
++		zyutil_dbg_printf("ERROR : uploadfilename == NULL\n");
+ 		return 0;
+ 	}
+ 
+@@ -1155,14 +1191,14 @@
+ 	fp = popen(cmd, "r");
+ 	if (fp == NULL)
+ 	{
+-	    zyutil_dbg_printf("ERROR : popen hexdump -n 2 /var/fw/%s fail\n", uploadfilename);
++		zyutil_dbg_printf("ERROR : popen hexdump -n 2 /var/fw/%s fail\n", uploadfilename);
+ 		return 0;
+ 	}
+ 
+ 	if (fgets(buffer, 64, fp) == NULL)
+ 	{
+-	    zyutil_dbg_printf("ERROR : fgets fail\n");
+-	    pclose(fp);
++		zyutil_dbg_printf("ERROR : fgets fail\n");
++		pclose(fp);
+ 		return 0;
+ 	}
+ 
+@@ -1272,6 +1308,7 @@
+         return -1;
+     }
+ }
++
+ /*!
+  *  get UPS state
+  *
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2021-01-08 18:18:46.995166791 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2021-01-08 18:18:47.023166790 +0800
+@@ -452,6 +452,12 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilIGetNthMACwithColon(char *mac, int nth)
++{
++	//TODO, fill here if you need.
++	return ZCFG_INTERNAL_ERROR;
++}
++
+ zcfgRet_t zyUtilSetSoftwareLedState(ZYLED_INDEX index ,ZYLED_ACTION action, ZYLED_RATE blink_rate)
+ {
+ 	char led_file_name[128] = {0}, sysCmd[128] = {0};
+Index: libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/QUALCOMM/libzyutil_wrapper.c	2021-01-08 18:18:46.935166793 +0800
++++ libzyutil-1.0/QUALCOMM/libzyutil_wrapper.c	2021-01-08 18:18:47.023166790 +0800
+@@ -33,6 +33,12 @@
+ 	return ZCFG_INTERNAL_ERROR;
+ }
+ 
++zcfgRet_t zyUtilIGetNthMACwithColon(char *mac, int nth)
++{
++	//TODO, fill here if you need.
++	return ZCFG_INTERNAL_ERROR;
++}
++
+ zcfgRet_t zyUtilIGetModelID(char *model_id)
+ {
+   zcfgLog(ZCFG_LOG_DEBUG, ">> %s\n", __FUNCTION__);

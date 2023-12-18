@@ -1,0 +1,60 @@
+diff -urN linux-3.10.14.orig/net/core/skbuff.c linux-3.10.14/net/core/skbuff.c
+--- linux-3.10.14.orig/net/core/skbuff.c	2020-02-21 17:22:33.014091154 +0800
++++ linux-3.10.14/net/core/skbuff.c	2021-04-07 08:29:29.401953400 +0800
+@@ -71,9 +71,14 @@
+ #include <trace/events/skb.h>
+ #include <linux/highmem.h>
+ #if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
++#ifdef CONFIG_RA_NAT_HW_IPV6_ZYXEL
++#include "../net/nat_20201028/hw_nat/ra_nat.h"
++#include "../net/nat_20201028/hw_nat/frame_engine.h"
++#else
+ #include "../net/nat/hw_nat/ra_nat.h"
+ #include "../net/nat/hw_nat/frame_engine.h"
+ #endif
++#endif
+ 
+ struct kmem_cache *skbuff_head_cache __read_mostly;
+ static struct kmem_cache *skbuff_fclone_cache __read_mostly;
+@@ -727,8 +732,28 @@
+ void __kfree_skb(struct sk_buff *skb)
+ {
+ #if defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
+-	if(IS_MAGIC_TAG_VALID(skb) || (FOE_MAGIC_TAG(skb) == FOE_MAGIC_PPE))
++#ifdef CONFIG_OPTIMIZED_MEMCPY_IN_GOBINET
++#ifndef CONFIG_RA_NAT_HW_IPV6_ZYXEL
++	if(skb->cloned && ((PdmaRxDescInfo4 *)((skb)->cb+40))->MAGIC_TAG==FOE_MAGIC_PPE){
++		skb->head=(void *) *((int *) (skb->cb+30));
++		((PdmaRxDescInfo4 *)((skb)->cb+40))->MAGIC_TAG=0;
++	}
++#else
++	if(skb->cloned && ((struct pdma_rx_desc_info4 *)((skb)->cb+40))->MAGIC_TAG_PROTECT==FOE_MAGIC_PPE){
++		skb->head=(void *) *((int *) (skb->cb+30));
++		((struct pdma_rx_desc_info4 *)((skb)->cb+40))->MAGIC_TAG_PROTECT=0;
++	}
++#endif
++#else
++#ifndef CONFIG_RA_NAT_HW_IPV6_ZYXEL
++	if(IS_MAGIC_TAG_VALID(skb) || (FOE_MAGIC_TAG(skb) == FOE_MAGIC_PPE)){
+ 		memset(FOE_INFO_START_ADDR(skb), 0, FOE_INFO_LEN);
++	}
++#else
++	hwnat_set_headroom_zero(skb);
++	hwnat_set_tailroom_zero(skb);        
++#endif              
++#endif
+ #endif
+ 
+ #if defined(CONFIG_RAETH_SKB_RECYCLE_2K)
+@@ -1239,9 +1264,9 @@
+ 		/* copy this zero copy skb frags */
+ 		if (skb_orphan_frags(skb, gfp_mask))
+ 			goto nofrags;
+-		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
++		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++){
+ 			skb_frag_ref(skb, i);
+-
++		}
+ 		if (skb_has_frag_list(skb))
+ 			skb_clone_fraglist(skb);
+ 

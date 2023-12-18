@@ -1,0 +1,26 @@
+diff -urN dnsmasq-2.67/src/dhcp.c dnsmasq-2.67_New/src/dhcp.c
+--- dnsmasq-2.67/src/dhcp.c	2020-01-22 14:08:29.671790898 +0800
++++ dnsmasq-2.67_New/src/dhcp.c	2020-01-22 14:12:16.731786215 +0800
+@@ -658,6 +658,22 @@
+ 	  /* iterate until we find a free address. */
+ 	  addr = start;
+ 	  
++#ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
++	  struct dhcp_lease *leaseIPPass = lease_find_by_addr(addr);
++	  if(leaseIPPass != NULL){
++		  //If receiving different MACs in DISCOVER request for same IP
++		  //Check if this IP is used now.
++		  if(strcmp(leaseIPPass->hwaddr, hwaddr) != 0){
++			  if(icmp_ping(addr)){
++				  //This IP is used, do nothing.
++			  }
++			  else{
++				  //No reply from this IP, release it from lease structure.
++				  lease_prune(leaseIPPass, now);
++			  }
++		  }
++	  }
++#endif
+ 	  do {
+ 	    /* eliminate addresses in use by the server. */
+ 	    for (d = context; d; d = d->current)

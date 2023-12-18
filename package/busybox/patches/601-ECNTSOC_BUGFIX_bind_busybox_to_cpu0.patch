@@ -1,0 +1,23 @@
+Index: busybox-1_20_1/init/init.c
+===================================================================
+--- busybox-1_20_1.orig/init/init.c	2021-07-28 15:42:30.280227000 +0800
++++ busybox-1_20_1/init/init.c	2021-07-28 15:46:02.112227000 +0800
+@@ -1250,7 +1250,7 @@
+ 	 */
+ 	die_sleep = 30 * 24*60*60;
+ 
+-#ifdef PLATFORM_ECONET
++#if defined(PLATFORM_ECONET) || defined(TARGET_econet)
+ 	/*20100921_serena_modify*/
+ 	/* to_cpuset(bb_xgetularg_bnd(aff, 16, 1, ULONG_MAX),* &new_mask); */
+ 	printf("busybox init and set aff\n");
+@@ -1261,6 +1261,9 @@
+ #else
+ 	unsigned long aff = 0x2;
+ #endif
++#ifdef TARGET_econet
++    aff = 0x1;
++#endif
+ 	cpu_set_t new_mask;
+ 	CPU_ZERO(&new_mask);
+ 	while (i < CPU_SETSIZE && aff >= (1<<i)) {

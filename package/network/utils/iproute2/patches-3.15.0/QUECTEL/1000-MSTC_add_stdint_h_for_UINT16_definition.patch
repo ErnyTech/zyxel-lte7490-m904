@@ -1,0 +1,15 @@
+Index: iproute2-3.15.0/tc/tc_core.c
+===================================================================
+--- iproute2-3.15.0.orig/tc/tc_core.c
++++ iproute2-3.15.0/tc/tc_core.c
+@@ -21,6 +21,10 @@
+ #include <arpa/inet.h>
+ #include <string.h>
+ 
++#ifdef TARGET_quectel
++#include <stdint.h>
++#endif
++
+ #include "tc_core.h"
+ #include <linux/atm.h>
+ 

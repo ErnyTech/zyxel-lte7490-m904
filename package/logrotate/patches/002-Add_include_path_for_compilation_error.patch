@@ -1,0 +1,27 @@
+Index: logrotate-3.7.1/Makefile
+===================================================================
+--- logrotate-3.7.1.orig/Makefile
++++ logrotate-3.7.1/Makefile
+@@ -4,13 +4,21 @@ CVSTAG = r$(subst .,-,$(VERSION))
+ OS_NAME = $(shell uname -s)
+ LFS = $(shell echo `getconf LFS_CFLAGS 2>/dev/null`)
+ 
++ifeq ($(CONFIG_TARGET_quectel),y)
++CFLAGS = -Wall -D_GNU_SOURCE -D$(OS_NAME) -DVERSION=\"$(VERSION)\" $(RPM_OPT_FLAGS) $(LFS) -I$(STAGING_DIR)/usr/include
++else
+ CFLAGS = -Wall -D_GNU_SOURCE -D$(OS_NAME) -DVERSION=\"$(VERSION)\" $(RPM_OPT_FLAGS) $(LFS)
++endif
++
+ PROG = logrotate
+ MAN = logrotate.8
+ 
+ #Develp by Zyxel
++ifeq ($(CONFIG_TARGET_quectel),y)
++LOADLIBES += -lpopt -L$(STAGING_DIR)/usr/lib
++else
+ LOADLIBES += -lpopt
+-
++endif
+ 
+ ifeq ($(WITH_SELINUX),yes)
+ CFLAGS += -DWITH_SELINUX

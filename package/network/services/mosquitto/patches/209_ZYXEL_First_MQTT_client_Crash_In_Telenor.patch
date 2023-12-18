@@ -1,0 +1,11 @@
+--- mosquitto-1.6.7.orig/lib/net_mosq.c	2022-03-09 15:33:02.699715000 +0800
++++ mosquitto-1.6.7/lib/net_mosq.c	2022-03-09 15:31:52.767715000 +0800
+@@ -475,7 +475,7 @@
+ #endif
+ 		}
+ 
+-		if(!findWanIf && ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName != NULL){
++		if(!findWanIf && mqtt_Params != NULL && ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName != NULL){
+ 			//printf("Bind fail with IP address, maybe it is IPPassthru mode, bind it with interface name now..\n");
+ 			snprintf(boundIf.ifr_name, IFNAMSIZ, "%s", ((mos_mqtt_conn_params_t*)mqtt_Params)->bind_interfaceName);
+ 			ret = setsockopt(*sock, SOL_SOCKET, SO_BINDTODEVICE, (char *)&boundIf,  sizeof(boundIf));

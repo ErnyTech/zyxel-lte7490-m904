@@ -1,0 +1,12 @@
+Index: libzyutil-1.0/zyutil.h
+===================================================================
+--- libzyutil-1.0.orig/zyutil.h	2021-01-28 01:57:58.134994368 +0800
++++ libzyutil-1.0/zyutil.h	2021-01-28 01:57:58.178972367 +0800
+@@ -13,6 +13,7 @@
+ #define SUB_SERIAL_NUM_STR_LEN  1	// not include EOL
+ 
+ /*Common*/
++void str_replace (char *source, char* find_str, char*rep_str);
+ void zyUtilIfaceHwAddrGet(char *, char *);
+ bool zyUtilIsAppRunning(char *);
+ bool zyUtilCheckIfaceUp(char *);

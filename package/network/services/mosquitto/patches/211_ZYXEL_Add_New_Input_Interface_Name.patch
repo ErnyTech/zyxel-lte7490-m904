@@ -1,0 +1,160 @@
+--- mosquitto-1.6.7.orig/client/client_shared.c	2022-05-06 15:18:36.338939000 +0800
++++ mosquitto-1.6.7/client/client_shared.c	2022-05-06 15:17:15.122939000 +0800
+@@ -167,6 +167,9 @@
+ 	if(cfg->bind_address)
+ 	free(cfg->bind_address);
+ 
++	if(cfg->mqtt_conn.bind_interfaceName)
++	free(cfg->mqtt_conn.bind_interfaceName);
++
+ 	if(cfg->username)
+ 	free(cfg->username);
+ 
+@@ -636,6 +639,25 @@
+ 				cfg->bind_address = strdup(argv[i+1]);
+ 			}
+ 			i++;
++		}else if(!strcmp(argv[i], "--interfaceName")){
++			if(i==argc-1){
++				fprintf(stderr, "Error: --interfaceName argument given but no interface name specified.\n\n");
++				return 1;
++			}else{
++				if(strcmp(argv[i+1], "wwan0") == 0 ||
++				   strcmp(argv[i+1], "wwan1") == 0 ||
++				   strcmp(argv[i+1], "wwan2") == 0 ||
++				   strcmp(argv[i+1], "wwan3") == 0)
++				{
++
++					cfg->mqtt_conn.bind_interfaceName = strdup(argv[i+1]);
++				}
++				else{
++					fprintf(stderr, "Error: Interface Name should be wwan[0-3], Your input %s.\n\n", argv[i+1]);
++					return 1;
++				}
++			}
++			i++;
+ #ifdef WITH_TLS
+ 		}else if(!strcmp(argv[i], "--cafile")){
+ 			if(i==argc-1){
+@@ -1409,14 +1431,14 @@
+ #if 0
+ 		rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props);
+ #else // for passing mqtt client parameters
+-		rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, NULL);
++		rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, &(cfg->mqtt_conn));
+ #endif
+ 	}
+ #else
+ #if 0
+ 	rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props);
+ #else // for passing mqtt client parameters
+-	rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, NULL);
++	rc = mosquitto_connect_bind_v5(mosq, cfg->host, port, cfg->keepalive, cfg->bind_address, cfg->connect_props, &(cfg->mqtt_conn));
+ #endif
+ #endif
+ 	if(rc>0){
+--- mosquitto-1.6.7.orig/client/client_shared.h	2022-05-06 15:18:36.338939000 +0800
++++ mosquitto-1.6.7/client/client_shared.h	2022-05-06 15:17:15.122939000 +0800
+@@ -25,6 +25,7 @@
+ #  include <sys/time.h>
+ #endif
+ #include "zcfg_debug.h"	//add for zcfg_log print on web.
++#include "net_mosq.h"
+ 
+ /* pub_client.c modes */
+ #define MSGMODE_NONE 0
+@@ -39,6 +40,67 @@
+ #define CLIENT_RR 3
+ #define CLIENT_RESPONSE_TOPIC 4
+ 
++#if 0
++typedef struct
++{
++    char* host;                   // Hostname of the broker
++    char* bind_address;           // Bind address
++    char* bind_interfaceName;     // Bind address
++    unsigned int port;            // Port for broker
++    int keepalive;                // Keepalive setting for broker connection
++    char* username;               // Username to connect to broker
++    char* password;               // Password to connect to broker
++    int instance;                 // Client instance (Device.MQTT.Client.{i})
++    bool enable;
++
++    mos_mqtt_protocolver_t version;      // MQTT protocol version to use
++
++	//Defined in TR181: Device.LocalAgent.Controller.{i}.MTP.{i}.MQTT.Topic
++    char* topic; // Topic to publish to - controller should sub to this
++
++    // Response topic, may be used - or not. Agent should sub to this.
++    // Depends on the configuration in the broker (in v5.0)
++	//Defined in TR181: Device.LocalAgent.MTP.{i}.MQTT.ResponseTopicConfigured
++    char* response_topic;
++    mos_mqtt_qos_t publish_qos;
++
++    // V5 Params
++    char* client_id;
++
++    // mqtt parameters
++    char* name;
++    mos_mqtt_tsprotocol_t ts_protocol;
++    bool clean_session;
++    bool clean_start;
++    bool request_response_info;
++    bool request_problem_info;
++    char* response_information;
++
++#if 0
++    // These items are not currently used.
++    // Most of these items are not really required for essential MQTT
++    // operation. Some could be added easily though.
++    // TODO: Add these
++    unsigned int session_expiry;
++    unsigned int receive_max;
++    unsigned int max_packet_size;
++    unsigned int topic_alias_max;
++    bool will_enable;
++    unsigned int will_qos;
++    bool will_retain;
++    unsigned int will_delay_interval;
++    unsigned int will_message_expiry;
++    char* will_content_type;
++    char* will_response_topic;
++    char* will_topic;
++    char* will_value;
++    unsigned int pubmsg_expinterval;
++    unsigned int message_retrytime;
++    char* auth_method;
++#endif
++    mos_mqtt_retry_params_t retry;
++} mos_mqtt_conn_params_t;
++#endif
+ struct mosq_config {
+ 	char *id;
+ 	char *id_prefix;
+@@ -125,6 +187,7 @@
+ 	int file_count; /* pub */
+ 	int parentIndex;
+ #endif
++	mos_mqtt_conn_params_t mqtt_conn;
+ };
+ 
+ int client_config_load(struct mosq_config *config, int pub_or_sub, int argc, char *argv[]);
+--- mosquitto-1.6.7.orig/client/pub_client.c	2022-05-06 15:18:36.338939000 +0800
++++ mosquitto-1.6.7/client/pub_client.c	2022-05-06 15:34:51.510939000 +0800
+@@ -484,6 +484,7 @@
+ #else
+ 	printf("                     [-A bind_address]\n");
+ #endif
++	printf("                     [---interfaceName {wwan[0-3]}}]\n");
+ 	printf("                     [-i id] [-I id_prefix]\n");
+ 	printf("                     [-d] [--quiet]\n");
+ 	printf("                     [-M max_inflight]\n");
+@@ -506,6 +507,8 @@
+ 	printf("       mosquitto_pub --help\n\n");
+ 	printf(" -A : bind the outgoing socket to this host/ip address. Use to control which interface\n");
+ 	printf("      the client communicates over.\n");
++	printf(" --interfaceName : bind the outgoing socket to this interface name(wwan[0-3]). Use to control which interface\n");
++	printf("      			   the client communicates over.\n");
+ 	printf(" -d : enable debug messages.\n");
+ 	printf(" -D : Define MQTT v5 properties. See the documentation for more details.\n");
+ 	printf(" -f : send the contents of a file as the message.\n");

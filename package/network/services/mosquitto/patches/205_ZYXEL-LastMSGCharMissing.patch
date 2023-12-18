@@ -1,0 +1,12 @@
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_New/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-01-15 11:24:07.320468215 +0800
++++ mosquitto-1.6.7_New/client/pub_client.c	2020-01-15 11:32:05.644458350 +0800
+@@ -287,7 +287,7 @@
+ 								return MOSQ_ERR_NOMEM;
+ 							}
+ 
+-							snprintf(backup, strlen(line_buf), "%s", line_buf);
++							snprintf(backup, buf_len_actual, "%s", line_buf);
+ 							char *delim = " ";
+ 							char * pch;
+ 							argc = 0;

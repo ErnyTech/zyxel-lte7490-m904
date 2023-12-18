@@ -1,0 +1,23 @@
+Index: libzyutil-1.0/ECONET/libzyutil_wrapper.c
+===================================================================
+--- libzyutil-1.0.orig/ECONET/libzyutil_wrapper.c	2020-11-09 14:55:32.769570133 +0800
++++ libzyutil-1.0/ECONET/libzyutil_wrapper.c	2020-11-09 15:05:26.532977434 +0800
+@@ -539,6 +539,18 @@
+ 	return ZCFG_SUCCESS;
+ }
+ 
++zcfgRet_t zyUtilIGetExternalFirmwareVersion(char *fwversion)
++{
++	struct trx_header trx_header_buff;
++
++	if(0 != zyUtilGetBootImageHeader((void *)&trx_header_buff))
++		return -1;
++
++	strcpy(fwversion, trx_header_buff.swVersionExt);
++
++	return ZCFG_SUCCESS;
++}
++
+ /*
+  * The input string must have the length, "SERIAL_NUM_STR_LEN+1".
+  */

@@ -1,0 +1,113 @@
+Index: ez-ipupdate-3.0.11b8/ez-ipupdate.c
+===================================================================
+--- ez-ipupdate-3.0.11b8.orig/ez-ipupdate.c	2021-11-11 15:02:07.643216000 +0800
++++ ez-ipupdate-3.0.11b8/ez-ipupdate.c	2021-11-11 15:05:53.907216000 +0800
+@@ -6632,6 +6632,9 @@
+   char updateInfo[256] = {0};
+   char DNSserver[64] = {0};
+   buf[BUFFER_SIZE] = '\0';
++  int i, j, updateInfoIndex;
++  char temp[32] = {0};
++  char *updateInfoPrefix = "GET ";
+ 
+   sscanf(url,  "%[^/]%s", DNSserver, updateInfo);
+   strcpy(type,"ipv4");
+@@ -6644,6 +6647,35 @@
+   return(UPDATERES_ERROR);
+ }
+ 
++  strcpy(buf, updateInfoPrefix);
++  updateInfoIndex = strlen(updateInfoPrefix);
++  for(i = 0; i < strlen(updateInfo); i++){
++	  if( updateInfo[i] != '<'){
++		  buf[updateInfoIndex] = updateInfo[i];
++		  updateInfoIndex++;
++	  }
++	  else{
++		  j = 0;
++		  i++;
++		  while(updateInfo[i] != '>'){
++			  temp[j] = updateInfo[i];
++			  j++;
++			  i++;
++		  }
++		  temp[j + 1] = '\0';
++
++		  if(strcmp(temp, "domain") == 0){
++			  strcat(buf, host);
++			  updateInfoIndex += strlen(host);
++		  }
++		  else if(strcmp(temp, "ipaddr") == 0){
++			  strcat(buf, address);
++			  updateInfoIndex += strlen(address);
++		  }
++	  }
++  }
++  output(buf);
++#if 0
+ if(strstr(updateInfo,"?")){
+   snprintf(buf, BUFFER_SIZE, "GET %s&", updateInfo);
+ }else{
+@@ -6653,6 +6685,7 @@
+ 
+   snprintf(buf, BUFFER_SIZE, "hostname=%s&",host);
+   output(buf);
++#endif
+ 
+   snprintf(buf, BUFFER_SIZE, " HTTP/1.1\015\012");
+   output(buf);
+@@ -6775,6 +6808,9 @@
+   SSL_CTX *ctx;
+   SSL *ssl;
+   int len;
++  int i, j, updateInfoIndex;
++  char temp[32] = {0};
++  char *updateInfoPrefix = "GET ";
+ 
+   sscanf(url,  "%[^/]%s", DNSserver, updateInfo);
+ 
+@@ -6787,6 +6823,36 @@
+     return(UPDATERES_ERROR);
+   }
+ 
++  strcpy(buf, updateInfoPrefix);
++  updateInfoIndex = strlen(updateInfoPrefix);
++  for(i = 0; i < strlen(updateInfo); i++){
++	  if( updateInfo[i] != '<'){
++		  buf[updateInfoIndex] = updateInfo[i];
++		  updateInfoIndex++;
++	  }
++	  else{
++		  j = 0;
++		  i++;
++		  while(updateInfo[i] != '>'){
++			  temp[j] = updateInfo[i];
++			  j++;
++			  i++;
++		  }
++		  temp[j + 1] = '\0';
++
++		  if(strcmp(temp, "domain") == 0){
++			  strcat(buf, host);
++			  updateInfoIndex += strlen(host);
++		  }
++		  else if(strcmp(temp, "ipaddr") == 0){
++			  strcat(buf, address);
++			  updateInfoIndex += strlen(address);
++		  }
++	  }
++  }
++  output(buf);
++
++#if 0
+   if(strstr(updateInfo,"?")){
+ 	snprintf(buf, BUFFER_SIZE, "GET %s&", updateInfo);
+   }else{
+@@ -6795,6 +6861,7 @@
+ 
+   snprintf(buf_str, BUFFER_SIZE, "hostname=%s&",host);
+   strcat(buf, buf_str);
++#endif
+ 
+   snprintf(buf_str, BUFFER_SIZE, " HTTP/1.1\015\012");
+   strcat(buf, buf_str);

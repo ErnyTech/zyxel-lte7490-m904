@@ -1,0 +1,18 @@
+Index: dnsmasq-2.78/src/dhcp.c
+===================================================================
+--- dnsmasq-2.78.orig/src/dhcp.c	2021-07-08 14:41:35.972227000 +0800
++++ dnsmasq-2.78/src/dhcp.c	2021-07-08 14:46:08.160227000 +0800
+@@ -377,6 +377,13 @@
+     dest.sin_port = htons(daemon->dhcp_server_port);
+     dest.sin_addr = mess->giaddr;
+   } else if (mess->ciaddr.s_addr) {
++    /* Get the packet information before reply packet. 
++     * With the NR7102 platform, the DHCPACK can not reply the client correctly.
++     * This is a workaround that we get the received packet before reply packet.
++     * It makes the reply packet bind with the received packet. 
++     */
++    msg.msg_control = control_u.control;
++    msg.msg_controllen = sizeof(control_u);
+     /* If the client's idea of its own address tallys with
+        the source address in the request packet, we believe the
+        source port too, and send back to that.  If we're replying

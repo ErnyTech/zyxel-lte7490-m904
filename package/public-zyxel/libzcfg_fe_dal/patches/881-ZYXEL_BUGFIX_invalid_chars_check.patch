@@ -1,0 +1,298 @@
+diff -Nuar libzcfg_fe_dal-1.0.orig/maintenance/diagnostic/zcfg_fe_dal_pingtest.c libzcfg_fe_dal-1.0/maintenance/diagnostic/zcfg_fe_dal_pingtest.c
+--- libzcfg_fe_dal-1.0.orig/maintenance/diagnostic/zcfg_fe_dal_pingtest.c	2021-01-26 15:05:52.440620874 +0800
++++ libzcfg_fe_dal-1.0/maintenance/diagnostic/zcfg_fe_dal_pingtest.c	2021-01-26 15:06:43.780354736 +0800
+@@ -59,6 +59,7 @@
+ unsigned int NumberOfRepetitions;
+ const char* HostName;
+ const char* DNSServer;
++bool invalidInput = false;
+ 
+ struct json_object *diagIPPingJobj;
+ struct json_object *diagTraceRTobj;
+@@ -94,6 +95,14 @@
+ 	}
+ 	if( NULL != json_object_object_get(Jobj, "Host") ){
+ 		Host = json_object_get_string(json_object_object_get(Jobj, "Host"));
++		invalidCharFilter(Host, 41);
++		if(DomainFilter(Host) == true || 
++			IPFilter(Host) == true ||
++			IPv6Filter(Host) == true){
++			invalidInput = false;
++		}
++		else
++			invalidInput = true;
+ 	}
+ 	if( NULL != json_object_object_get(Jobj, "DiagnosticsState") ){
+ 		DiagnosticsState = json_object_get_string(json_object_object_get(Jobj, "DiagnosticsState"));
+@@ -109,6 +118,14 @@
+ 	}
+ 	if( NULL != json_object_object_get(Jobj, "Host") ){
+ 		Host = json_object_get_string(json_object_object_get(Jobj, "Host"));
++		invalidCharFilter(Host, 41);
++		if(DomainFilter(Host) == true || 
++			IPFilter(Host) == true ||
++			IPv6Filter(Host) == true){
++			invalidInput = false;
++		}
++		else
++			invalidInput = true;
+ 	}
+ 	if( NULL != json_object_object_get(Jobj, "DiagnosticsState") ){
+ 		DiagnosticsState = json_object_get_string(json_object_object_get(Jobj, "DiagnosticsState"));
+@@ -124,6 +141,15 @@
+ 	}else if( NULL != json_object_object_get(Jobj, "Host") ){
+ 		HostName = json_object_get_string(json_object_object_get(Jobj, "Host"));
+ 	}
++	invalidCharFilter(HostName, 41);
++	if(DomainFilter(HostName) == true || 
++			IPFilter(HostName) == true ||
++			IPv6Filter(HostName) == true){
++			invalidInput = false;
++	}
++	else
++		invalidInput = true;
++
+ 	if( NULL != json_object_object_get(Jobj, "DiagnosticsState") ){
+ 		DiagnosticsState = json_object_get_string(json_object_object_get(Jobj, "DiagnosticsState"));
+ 	}
+@@ -136,6 +162,10 @@
+ 	zcfgRet_t ret = ZCFG_SUCCESS;
+ 	ZLOG_INFO("Enter.. \n ");
+ 	getIpDiagIPPingBasicInfo(Jobj);
++	if(invalidInput){
++		printf("\ninvalid input...\n");
++		return ZCFG_INTERNAL_ERROR;
++	}
+ 
+ 	IID_INIT(IpDiagIPPingIid);
+ 	if((ret = zcfgFeObjJsonGet(RDM_OID_IP_DIAG_IPPING, &IpDiagIPPingIid, &diagIPPingJobj)) != ZCFG_SUCCESS) {
+@@ -166,6 +196,10 @@
+ 	zcfgRet_t ret = ZCFG_SUCCESS;
+ 	ZLOG_INFO("Enter.. \n ");
+ 	getIpDiagTraceRTBasicInfo(Jobj);
++	if(invalidInput){
++		printf("\ninvalid input...\n");
++		return ZCFG_INTERNAL_ERROR;
++	}
+ 
+ 	IID_INIT(IpDiagTraceRTIid);
+ 	if((ret = zcfgFeObjJsonGet(RDM_OID_IP_DIAG_TRACE_RT, &IpDiagTraceRTIid, &diagTraceRTobj)) != ZCFG_SUCCESS) {
+@@ -193,6 +227,11 @@
+ 	zcfgRet_t ret = ZCFG_SUCCESS;
+ 	ZLOG_INFO("Enter.. \n ");
+ 	getDNSDiagNSLookUpgBasicInfo(Jobj);
++	if(invalidInput){
++		printf("\ninvalid input...\n");
++		return ZCFG_INTERNAL_ERROR;
++	}
++
+ 
+ 	IID_INIT(DNSDiagNSLookUpIid);
+ 	if((ret = zcfgFeObjJsonGet(RDM_OID_DNS_DIAG_NS_LOOKUP_DIAG, &DNSDiagNSLookUpIid, &dnsNSLookUpobj)) != ZCFG_SUCCESS) {
+diff -Nuar libzcfg_fe_dal-1.0.orig/maintenance/zcfg_fe_dal_snmp.c libzcfg_fe_dal-1.0/maintenance/zcfg_fe_dal_snmp.c
+--- libzcfg_fe_dal-1.0.orig/maintenance/zcfg_fe_dal_snmp.c	2021-01-26 15:05:43.888665207 +0800
++++ libzcfg_fe_dal-1.0/maintenance/zcfg_fe_dal_snmp.c	2021-01-26 15:09:49.647391194 +0800
+@@ -78,6 +78,12 @@
+ 	Contact = json_object_get_string(json_object_object_get(Jobj, "Contact"));
+ 	domainName = json_object_get_string(json_object_object_get(Jobj, "DomainName"));
+ 
++	invalidCharFilter(HostName, 31);
++	if(HostNameFilter(HostName) == false){
++		printf("invalid HostName...\n");
++		return false;       
++	}
++
+ 	IID_INIT(SysInfoIid);
+ 	ret = zcfgFeObjJsonGetWithoutUpdate(RDM_OID_SYSTEM_INFO, &SysInfoIid, &SysInfoObj);
+ 
+@@ -148,8 +154,8 @@
+ 	zcfgRet_t ret = ZCFG_SUCCESS;
+ 
+ 	setSNMPObj(Jobj);
+-	setSysInfoObj(Jobj);
+ 	setTrap_addrObj(Jobj);
++	ret = setSysInfoObj(Jobj);
+ 
+ 	return ret;
+ }
+diff -Nuar libzcfg_fe_dal-1.0.orig/network/broadband/zcfg_fe_dal_wwanbackup.c libzcfg_fe_dal-1.0/network/broadband/zcfg_fe_dal_wwanbackup.c
+--- libzcfg_fe_dal-1.0.orig/network/broadband/zcfg_fe_dal_wwanbackup.c	2021-01-26 15:05:52.696619547 +0800
++++ libzcfg_fe_dal-1.0/network/broadband/zcfg_fe_dal_wwanbackup.c	2021-01-26 15:13:32.350236709 +0800
+@@ -364,6 +364,14 @@
+ 		pingGw = json_object_get_boolean(json_object_object_get(Jobj, "Ping_DefaultGateway"));
+ 		destination = json_object_get_string(json_object_object_get(Jobj, "Ping_Destination"));
+ 
++		invalidCharFilter(destination, 46);
++		if(DomainFilter(destination) == false){
++			if(IPFilter(destination) == false){
++				printf("invalid IP Address...\n");
++				return false;
++			}
++		}
++
+ 		if(json_object_object_get(Jobj, "Ping_Enable"))
+ 		json_object_object_add(pingObj, "Enable", json_object_new_boolean(enable));
+ 		if(json_object_object_get(Jobj, "Ping_Interval"))
+diff -Nuar libzcfg_fe_dal-1.0.orig/network/homeNetworking/zcfg_fe_dal_lansetup.c libzcfg_fe_dal-1.0/network/homeNetworking/zcfg_fe_dal_lansetup.c
+--- libzcfg_fe_dal-1.0.orig/network/homeNetworking/zcfg_fe_dal_lansetup.c	2021-01-26 15:05:53.140617245 +0800
++++ libzcfg_fe_dal-1.0/network/homeNetworking/zcfg_fe_dal_lansetup.c	2021-01-26 15:19:53.788259313 +0800
+@@ -1022,6 +1022,13 @@
+ 		ip6LinkLocalAdr = json_object_get_string(json_object_object_get(Jobj, "IPv6_LinkLocalAddress"));
+ 		if(ip6LinkLocalAdr == NULL)
+ 			return ret;
++		else{
++			invalidCharFilter(ip6LinkLocalAdr, 26);
++			if(IPv6Filter(ip6LinkLocalAdr) == false){
++				printf("invalid local ipv6 address...\n");
++				return false;
++			}
++		}
+ 		
+ 		while(zcfgFeSubInObjJsonGetNext(RDM_OID_IP_IFACE_V6_ADDR, &curIpIfaceIid, &v6AddrIid, &v6AddrObj)== ZCFG_SUCCESS){
+ 			ip6Origin = json_object_get_string(json_object_object_get(v6AddrObj, "Origin"));
+diff -Nuar libzcfg_fe_dal-1.0.orig/zcfg_fe_dal.c libzcfg_fe_dal-1.0/zcfg_fe_dal.c
+--- libzcfg_fe_dal-1.0.orig/zcfg_fe_dal.c	2021-01-26 15:05:53.312616353 +0800
++++ libzcfg_fe_dal-1.0/zcfg_fe_dal.c	2021-01-26 15:06:44.088353131 +0800
+@@ -2,6 +2,7 @@
+ #include <json/json.h>
+ #include <netinet/in.h>
+ #include <ctype.h>
++#include <regex.h>
+ #include "zcfg_rdm_oid.h"
+ #include "zcfg_fe_dal_common.h"
+ #include "zcfg_fe_dal.h"
+@@ -2427,6 +2427,117 @@
+     return true;
+ }
+ 
++void invalidCharFilter(char *input, int maxlen){
++	int i = 0;
++	int length = strlen(input);
++	
++	if(NULL != input){
++		for( i = 0; i < length; i++){
++			if(input[i] == ';' || input[i] == '&' || input[i] == '|')
++				input[i] = '\0';
++		}
++		if(length > maxlen){
++			input[maxlen-1] = '\0';
++		}
++	}
++}
++
++bool HostNameFilter(const char *input){
++	bool result = false;
++	
++	regex_t preg;
++	regmatch_t matchptr[1];
++	const size_t nmatch = 1;
++	const char* pattern = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$";
++	int status;
++	
++	regcomp(&preg, pattern, REG_EXTENDED|REG_ICASE);
++	status = regexec(&preg, input, nmatch, matchptr, 0);
++	if (status == REG_NOMATCH){
++	    printf("invalid Hostname\n");
++	    result = false;
++	}
++	else if (status == 0){
++	    printf("valid Hostname\n");
++	    result = true;
++	}
++	regfree(&preg);
++	return result;
++}
++
++bool DomainFilter(const char *input){
++	bool result = false;
++	
++	regex_t preg;
++	regmatch_t matchptr[1];
++	const size_t nmatch = 1;
++	const char* pattern = "^([^-][A-Za-z0-9-]{1,63}\\.)+([A-Za-z0-9-]{1,63}\\.)*+[A-Za-z]{2,6}+([.]?)$";
++	int status, maxlen = 254;
++	
++	if(strlen(input) > maxlen)
++		return result;
++
++	regcomp(&preg, pattern, REG_EXTENDED|REG_ICASE);
++	status = regexec(&preg, input, nmatch, matchptr, 0);
++	if (status == REG_NOMATCH){
++	    printf("invalid Domain\n");
++	    result = false;
++	}
++	else if (status == 0){
++	    printf("valid Domain\n");
++	    result = true;
++	}
++	regfree(&preg);
++	return result;
++}
++
++bool IPFilter(const char *input){
++	bool result = false;
++	
++	regex_t preg;
++	regmatch_t matchptr[1];
++	const size_t nmatch = 1;
++	const char* pattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
++	int status;
++	
++	regcomp(&preg, pattern, REG_EXTENDED|REG_ICASE);
++	status = regexec(&preg, input, nmatch, matchptr, 0);
++	if (status == REG_NOMATCH){
++	    printf("invalid IP\n");
++	    result = false;
++	}
++	else if (status == 0){
++	    printf("valid IP\n");
++	    result = true;
++	}
++	regfree(&preg);
++	return result;
++}
++
++bool IPv6Filter(const char *input){
++	bool result = false;
++	
++	regex_t preg;
++	regmatch_t matchptr[1];
++	const size_t nmatch = 1;
++	const char* pattern = "^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|(fe80:(:[0-9a-fA-F]{0,4}){0,6}(((25[0-5]|(2[0-4][0-9]|1{0,1}[0-9]|[0-9]?[0-9]))\\.){3,3}(25[0-5]|(2[0-4][0-9]|1[0-9][0-9]|[0-9]?[0-9])))?(/((1[0-2][0-8]|1{0,1}[0-9])))?)|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$";
++	int status;
++	
++	regcomp(&preg, pattern, REG_EXTENDED|REG_ICASE);
++		
++	status = regexec(&preg, input, nmatch, matchptr, 0);
++	if (status == REG_NOMATCH){
++	    printf("invalid IPv6 address\n");
++	    result = false;
++	}
++	else if (status == 0){
++	    printf("valid IPv6 address\n");
++	    result = true;
++	}
++	regfree(&preg);
++	return result;
++}
++
+ #if 1
+ bool validateMacAddr1(const char *macAddr, const char *delim){
+ 	char buff[32];
+diff -Nuar libzcfg_fe_dal-1.0.orig/zcfg_fe_dal.h libzcfg_fe_dal-1.0/zcfg_fe_dal.h
+--- libzcfg_fe_dal-1.0.orig/zcfg_fe_dal.h	2021-01-26 15:05:44.800660480 +0800
++++ libzcfg_fe_dal-1.0/zcfg_fe_dal.h	2021-01-26 15:14:34.841912737 +0800
+@@ -1,6 +1,13 @@
+ 
+ zcfgRet_t zcfgFeDalHandler(const char *handlerName, const char *method, struct json_object *Jobj, struct json_object *Jarray, char *replyMsg);
+ zcfgRet_t getWanLanList(struct json_object **Jarray);
++
++void invalidCharFilter(char *input, int maxlen);
++bool HostNameFilter(const char *input);
++bool DomainFilter(const char *input);
++bool IPFilter(const char *input);
++bool IPv6Filter(const char *input);
++
+ int isDigitString(char *getString);
+ zcfgRet_t insertLoginUserInfo(struct json_object *Jobj, const char *userName, const char *level);
+ zcfgRet_t getLoginUserInfo(struct json_object *Jobj, char *userName, char *level);

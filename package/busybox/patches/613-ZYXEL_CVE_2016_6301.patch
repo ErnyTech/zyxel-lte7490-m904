@@ -1,0 +1,17 @@
+diff -urN busybox-1_20_1.orig/networking/ntpd.c busybox-1_20_1/networking/ntpd.c
+--- busybox-1_20_1.orig/networking/ntpd.c	2021-12-02 10:50:19.077332552 +0800
++++ busybox-1_20_1/networking/ntpd.c	2021-12-02 11:05:14.702297000 +0800
+@@ -1835,6 +1835,13 @@
+ 		goto bail;
+ 	}
+ 
++	/* Respond only to client and symmetric active packets */
++	if ((msg.m_status & MODE_MASK) != MODE_CLIENT
++	 && (msg.m_status & MODE_MASK) != MODE_SYM_ACT
++	) {
++		goto bail;
++	}
++
+ 	query_status = msg.m_status;
+ 	query_xmttime = msg.m_xmttime;
+ 

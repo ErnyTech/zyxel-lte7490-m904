@@ -1,0 +1,55 @@
+diff -urN mosquitto-1.6.7/client/pub_client.c mosquitto-1.6.7_new/client/pub_client.c
+--- mosquitto-1.6.7/client/pub_client.c	2020-01-14 16:19:07.433885140 +0800
++++ mosquitto-1.6.7_new/client/pub_client.c	2020-01-14 16:20:46.713883092 +0800
+@@ -254,7 +254,7 @@
+ 	char **argv;//Jessie
+ 	bool stdin_finished = false;
+ 	char buf[256];
+-	char backup[256];
++	char *backup = NULL;
+ 	if(cfg.repeat_count > 1 && (cfg.repeat_delay.tv_sec == 0 || cfg.repeat_delay.tv_usec != 0)){
+ 		loop_delay = cfg.repeat_delay.tv_usec / 2000;
+ 	}
+@@ -270,7 +270,7 @@
+ 		if(mode == MSGMODE_STDIN_LINE){
+ 			//printf("%s() AAA \n", __FUNCTION__);
+ 			memset(buf, 0, sizeof(buf));
+-						read(client_to_server, buf, sizeof(buf));//Jessie QQQ
++						//read(client_to_server, buf, sizeof(buf));//Jessie QQQ
+ 						//printf("%s() AAA buf=%s\n", __FUNCTION__, buf);
+ 			if(status == STATUS_CONNACK_RECVD){
+ 				pos = 0;
+@@ -281,7 +281,13 @@
+ 						line_buf[buf_len_actual-1] = '\0';
+ 						#if 1//ZYXEL_MQTT_PUBLISHER
+ 						if(strlen(line_buf) != 0){
+-							snprintf(backup, sizeof(backup), "%s", line_buf);
++							backup = (char*)malloc(sizeof(char)*buf_len_actual);
++							if(!backup){
++								err_printf(&cfg, "Error: Out of memory.\n");
++								return MOSQ_ERR_NOMEM;
++							}
++
++							snprintf(backup, strlen(line_buf), "%s", line_buf);
+ 							char *delim = " ";
+ 							char * pch;
+ 							argc = 0;
+@@ -289,7 +295,7 @@
+ 							pch = strtok(line_buf,delim);
+ 							while (pch != NULL)
+ 							{
+-								//printf ("pch=%s\n",pch);
++								//printf ("pch=%s(argc == %d)\n",pch, argc);
+ 								argc++;
+ 								pch = strtok (NULL, delim);
+ 							}
+@@ -313,6 +319,9 @@
+ 									argc++;
+ 									pch = strtok (NULL, delim);
+ 								}
++								if(backup){
++									free(backup);
++								}
+ 							}
+ 							rc = client_config_load(&cfg, CLIENT_PUB, argc, argv);
+ 

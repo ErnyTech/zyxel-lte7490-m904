@@ -1,0 +1,12 @@
+--- a/gio/gdbusmessage.c
++++ b/gio/gdbusmessage.c
+@@ -35,6 +35,9 @@
+ #ifdef HAVE_UNISTD_H
+ #include <unistd.h>
+ #endif
++#ifdef TARGET_quectel
++#include <sys/sysmacros.h>
++#endif
+ 
+ #include "gdbusutils.h"
+ #include "gdbusmessage.h"

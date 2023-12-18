@@ -1,0 +1,256 @@
+Index: libzcfg_fe_rdm_struct-1.0/Makefile
+===================================================================
+--- libzcfg_fe_rdm_struct-1.0.orig/Makefile	2020-06-09 17:43:23.911097716 +0800
++++ libzcfg_fe_rdm_struct-1.0/Makefile	2020-06-09 17:43:23.939097716 +0800
+@@ -3,6 +3,10 @@
+ LIB_PATH = -L$(USRLIBDIR)
+ LINK_LIBS = -ljson -lzcfg_msg -lzcfg_fe_rdm_access -lzcmd_tool
+ 
++ifeq ($(CONFIG_ZYXEL_MEMORY_LEAK_DETECT),y)
++CFLAGS += -DZCFG_MEMORY_LEAK_DETECT
++endif
++
+ LDFLAGS += $(LIB_PATH) $(LINK_LIBS)
+ CFLAGS += -I$(TOOLCHAIN)/include -I. -std=gnu99
+ 
+Index: libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.c
+===================================================================
+--- libzcfg_fe_rdm_struct-1.0.orig/zcfg_fe_rdm_struct.c	2020-06-09 17:43:23.919097716 +0800
++++ libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.c	2020-06-09 17:43:23.939097716 +0800
+@@ -1,6 +1,6 @@
+ #include "zcfg_common.h"
+ #include "zcfg_fe_rdm_access.h"
+-#include "zcfg_fe_rdm_struct.h"
++//#include "zcfg_fe_rdm_struct.h"
+ #include "zcmd_schema.h"
+ #include "zcmd_tool.h"
+ #include "zcfg_msg.h"
+@@ -23,6 +23,24 @@
+ 	return ret;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeObjStructGetNext(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	ret = zcfgFeObjRead(oid, objIid, REQUEST_GET_NEXT_OBJ, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
++	return ret;
++}
++#endif
++
+ zcfgRet_t zcfgFeObjStructGetNextWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct)
+ {
+ 	zcfgRet_t ret;
+@@ -39,6 +57,23 @@
+ 	return ret;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeObjStructGetNextWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	ret = zcfgFeObjRead(oid, objIid, REQUEST_GET_NEXT_OBJ_WITHOUT_UPDATE, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
++	return ret;
++}
++#endif
+ 
+ zcfgRet_t zcfgFeObjStructGet(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct)
+ {
+@@ -53,8 +88,26 @@
+ 		free(result);
+ 	}
+ 
+-        return ret;
++    return ret;
++}
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeObjStructGet(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	ret = zcfgFeObjRead(oid, objIid, REQUEST_GET_OBJ, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
++	return ret;
+ }
++#endif
+ 
+ zcfgRet_t zcfgFeObjStructGetWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct)
+ {
+@@ -69,8 +122,26 @@
+ 		free(result);
+ 	}
+ 
++    return ret;
++}
++
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeObjStructGetWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	ret = zcfgFeObjRead(oid, objIid, REQUEST_GET_OBJ_WITHOUT_UPDATE, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
+         return ret;
+ }
++#endif
+ 
+ zcfgRet_t zcfgFeSubInStructGetNext(zcfg_offset_t oid, objIndex_t *objIid, objIndex_t *insIid, void **requestStruct)
+ {
+@@ -95,6 +166,31 @@
+ 	return ret;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeSubInStructGetNext(zcfg_offset_t oid, objIndex_t *objIid, objIndex_t *insIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	if(objIid->level >= insIid->level) {
++		memcpy(insIid, objIid, sizeof(objIndex_t));
++		insIid->level++;
++	}
++
++	insIid->idx[insIid->level-1]++;
++
++	ret = zcfgFeObjRead(oid, insIid, REQUEST_GET_NEXT_SUB, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
++	return ret;
++}
++#endif
++
+ zcfgRet_t zcfgFeSubInStructGetNextWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, objIndex_t *insIid, void **requestStruct)
+ {
+ 	zcfgRet_t ret;
+@@ -118,6 +214,31 @@
+ 	return ret;
+ }
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++zcfgRet_t _zcfgFeSubInStructGetNextWithoutUpdate(zcfg_offset_t oid, objIndex_t *objIid, objIndex_t *insIid, void **requestStruct, const char *fileName, int line)
++{
++	zcfgRet_t ret;
++	char *result = NULL;
++
++	if(objIid->level >= insIid->level) {
++		memcpy(insIid, objIid, sizeof(objIndex_t));
++		insIid->level++;
++	}
++
++	insIid->idx[insIid->level-1]++;
++
++	ret = zcfgFeObjRead(oid, insIid, REQUEST_GET_NEXT_SUB_WITHOUT_UPDATE, &result);
++
++	if(ret == ZCFG_SUCCESS) {
++		/*Translate json string to user request structure*/
++		ret = _zcmdJStringToStruct(requestStruct, result, oid, schemaShmAddr, fileName, line);
++		free(result);
++	}
++
++	return ret;
++}
++#endif
++
+ zcfgRet_t zcfgFeObjStructSet(zcfg_offset_t oid, objIndex_t *objIid, void *requestStruct, char *feedbackMsg)
+ {
+ 	zcfgRet_t ret;
+Index: libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.h
+===================================================================
+--- libzcfg_fe_rdm_struct-1.0.orig/zcfg_fe_rdm_struct.h	2020-06-09 17:43:23.931097716 +0800
++++ libzcfg_fe_rdm_struct-1.0/zcfg_fe_rdm_struct.h	2020-06-09 17:44:52.823485599 +0800
+@@ -1,22 +1,49 @@
+ #ifndef _LIBZCFG_FE_RDM_STRUCT_H
+ #define _LIBZCFG_FE_RDM_STRUCT_H
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++
++#include "zos_api.h"
++
++#define zcfgFeObjStructGetNext(oid, iid, obj) _zcfgFeObjStructGetNext(oid, iid, obj, __FILE__, __LINE__)
++#define zcfgFeObjStructGetNextWithoutUpdate(oid, iid, obj) _zcfgFeObjStructGetNextWithoutUpdate(oid, iid, obj, __FILE__, __LINE__)
++#define zcfgFeObjStructGet(oid, iid, obj) _zcfgFeObjStructGet(oid, iid, obj, __FILE__, __LINE__)
++#define zcfgFeObjStructGetWithoutUpdate(oid, iid, obj) _zcfgFeObjStructGetWithoutUpdate(oid, iid, obj, __FILE__, __LINE__)
++#define zcfgFeSubInStructGetNext(oid, iid, iid2, obj) _zcfgFeSubInStructGetNext(oid, iid, iid2, obj, __FILE__, __LINE__)
++#define zcfgFeSubInStructGetNextWithoutUpdate(oid, iid, iid2, obj) _zcfgFeSubInStructGetNextWithoutUpdate(oid, iid, iid2, obj, __FILE__, __LINE__)
++
++zcfgRet_t _zcfgFeObjStructGetNext(zcfg_offset_t, objIndex_t *, void **, const char *, int);
++zcfgRet_t _zcfgFeObjStructGetNextWithoutUpdate(zcfg_offset_t, objIndex_t *, void **, const char *, int);
++zcfgRet_t _zcfgFeObjStructGet(zcfg_offset_t, objIndex_t *, void **, const char *, int);
++zcfgRet_t _zcfgFeObjStructGetWithoutUpdate(zcfg_offset_t, objIndex_t *, void **, const char *, int);
++zcfgRet_t _zcfgFeSubInStructGetNext(zcfg_offset_t , objIndex_t *, objIndex_t *, void **, const char *, int);
++zcfgRet_t _zcfgFeSubInStructGetNextWithoutUpdate(zcfg_offset_t, objIndex_t *, objIndex_t *, void **, const char *, int);
++
++#else
++
+ zcfgRet_t zcfgFeObjStructGetNext(zcfg_offset_t, objIndex_t *, void **);
+ zcfgRet_t zcfgFeObjStructGetNextWithoutUpdate(zcfg_offset_t , objIndex_t *, void **);
+ zcfgRet_t zcfgFeObjStructGet(zcfg_offset_t, objIndex_t *, void **);
+ zcfgRet_t zcfgFeObjStructGetWithoutUpdate(zcfg_offset_t, objIndex_t *, void **);
+ zcfgRet_t zcfgFeSubInStructGetNext(zcfg_offset_t, objIndex_t *, objIndex_t *, void **);
+ zcfgRet_t zcfgFeSubInStructGetNextWithoutUpdate(zcfg_offset_t, objIndex_t *, objIndex_t *, void **);
++
++#endif
++
+ zcfgRet_t zcfgFeObjStructSet(zcfg_offset_t, objIndex_t *, void *, char *);
+ zcfgRet_t zcfgFeObjStructSetWithoutApply(zcfg_offset_t, objIndex_t *, void *, char *);
+ zcfgRet_t zcfgFeObjStructAdd(zcfg_offset_t, objIndex_t *, char *);
+ zcfgRet_t zcfgFeObjStructDel(zcfg_offset_t, objIndex_t *, char *);
++
+ #if 1 /* non-blocking config apply, ZyXEL, John */
+ zcfgRet_t zcfgFeObjStructBlockedSet(zcfg_offset_t oid, objIndex_t *objIid, void *requestStruct, char *feedbackMsg);
+ zcfgRet_t zcfgFeObjStructBlockedAdd(zcfg_offset_t oid, objIndex_t *objIid, char *feedbackMsg);
+ zcfgRet_t zcfgFeObjStructBlockedDel(zcfg_offset_t oid, objIndex_t *objIid, char *feedbackMsg);
+ #endif
+ 
++#ifdef ZCFG_MEMORY_LEAK_DETECT
++#define zcfgFeObjStructFree(obj) ZOS_FREE(obj)
++#else
+ #define zcfgFeObjStructFree(obj) \
+     {\
+         do \
+@@ -33,5 +60,6 @@
+         } \
+         while (0); \
+     }
++#endif
+ 
+ #endif

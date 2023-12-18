@@ -1,0 +1,55 @@
+--- a/src/rfc2131.c
++++ b/src/rfc2131.c
+@@ -138,6 +138,7 @@ static int pxe_uefi_workaround(int pxe_a
+                                time_t now, int pxe);
+ static void apply_delay(u32 xid, time_t recvtime, struct dhcp_netid *netid);
+ 
++char tmpClid[128];//Jessie
+ size_t dhcp_reply(struct dhcp_context *context, char *iface_name, int int_index,
+                   size_t sz, time_t now, int unicast_dest, int loopback,
+                   int *is_inform, int pxe, struct in_addr fallback,
+@@ -179,7 +180,7 @@ size_t dhcp_reply(struct dhcp_context *c
+   char *vendor_class_ptr = NULL;
+   struct dhcp_ifname *ifname;
+ #endif
+-
++int jjjjj;//Jessie
+   subnet_addr.s_addr = override.s_addr = 0;
+ 
+   /* set tag with name == interface */
+@@ -313,8 +314,33 @@ size_t dhcp_reply(struct dhcp_context *c
+ 
+     /* If there is no client identifier option, use the hardware address */
+     if ((opt = option_find(mess, sz, OPTION_CLIENT_ID, 1))) {
+-      clid_len = option_len(opt);
+-      clid = option_ptr(opt, 0);
++        clid_len = option_len(opt);
++        clid = option_ptr(opt, 0);
++        int iiiiii;
++        for(iiiiii=0;iiiiii<6;iiiiii++){
++            if(mess->chaddr[iiiiii]==clid[iiiiii+1]){
++                //skip
++            } else {
++                break;
++            }
++        }
++        if(6==iiiiii){
++            clid_len = 7;
++            for(iiiiii=1; iiiiii< 7; iiiiii++)
++                clid[iiiiii] = int_index;
++            my_syslog(MS_DHCP | LOG_DEBUG, "%s client id==MAC address", __func__);
++        } else {
++            my_syslog(MS_DHCP | LOG_DEBUG, "%s client id!=MAC address", __func__);
++        }
++    }
++    else {
++        my_syslog(MS_DHCP | LOG_DEBUG, "%s NO client id,int_index=%d", __func__, int_index);
++        memset(tmpClid, 0, sizeof(tmpClid));
++        clid_len = 7;
++        clid = tmpClid;
++        clid[0] = 1;
++        for(jjjjj=1; jjjjj< 7; jjjjj++)
++            clid[jjjjj] = int_index;
+     }
+ 
+     /* do we have a lease in store? */

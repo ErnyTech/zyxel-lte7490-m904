@@ -1,0 +1,234 @@
+Index: busybox-1_20_1/networking/ftpgetput.c
+===================================================================
+--- busybox-1_20_1.orig/networking/ftpgetput.c	2021-08-19 17:37:18.389052000 +0800
++++ busybox-1_20_1/networking/ftpgetput.c		2021-08-19 17:37:25.469052000 +0800
+@@ -74,6 +74,10 @@
+ 	STATUS_ERR_NO_TRANS_COMPLETE
+ };
+ 
++#ifdef ZCFG_SUPPORT_TR369
++#define DIAG_RESULT_PATH "/var/diagResult"
++#endif
++
+ #endif
+ 
+ struct globals {
+@@ -89,6 +93,9 @@
+ 	const char *dscp;
+ 	const char *ethpriority;
+ 	const char *dummy_size;
++#ifdef ZCFG_SUPPORT_TR369
++	char *instanceNum;
++#endif
+ #endif
+ 	char buf[4]; /* actually [BUFSZ] */
+ } FIX_ALIASING;
+@@ -130,6 +137,7 @@
+ #endif
+ 
+ 
++static int pump_data_and_QUIT(int from, int to);
+ static void ftp_die(const char *msg) NORETURN;
+ static void ftp_die(const char *msg)
+ {
+@@ -332,9 +340,16 @@
+     rdm_IpDiagUlDiag_t *data;
+ #endif
+ 	zcfgRet_t rst;
++#ifdef ZCFG_SUPPORT_TR369
++	char dlDiagOuputPath[128];//TR-369
++#endif
+ 
+ 	if(rt == EXIT_SUCCESS) {
++#ifdef ZCFG_SUPPORT_TR369
++		strcpy(ipDiagUlObj->DiagnosticsState, "Complete");
++#else
+ 		strcpy(ipDiagUlObj->DiagnosticsState, "Completed");
++#endif
+ 	}else {
+ 		switch(diagStateErrCode) {
+ 		case STATUS_ERR_INIT_CONN_FAILED:
+@@ -383,6 +398,10 @@
+ 		json_object_object_add(ulDiagObjParams, "TotalBytesReceived", json_object_new_int(ipDiagUlObj->TotalBytesReceived));
+ 		json_object_object_add(ulDiagObjParams, "TotalBytesSent", json_object_new_int(ipDiagUlObj->TotalBytesSent));
+ 	}
++#ifdef ZCFG_SUPPORT_TR369
++   	snprintf(dlDiagOuputPath, sizeof(dlDiagOuputPath), "%s.dlDiag%s", DIAG_RESULT_PATH, G.instanceNum);
++	json_object_to_file(dlDiagOuputPath, ulDiagObjParams);
++#endif
+ 
+ 	printf("DiagnosticsState: %s\n", ipDiagUlObj->DiagnosticsState);
+ 	printf("Interface: %s\n", ipDiagUlObj->Interface);
+@@ -505,6 +524,82 @@
+ 
+ 	return rt;
+ }
++
++static int receive_dummy_data_and_QUIT(const unsigned int data_size, int from, int to)
++{
++	int rt = EXIT_SUCCESS;
++	char *dummy_data = NULL;
++	unsigned int send_data_size = 0, sent_data_size = 0;
++
++	if(!data_size || !from) {
++		rt = EXIT_FAILURE;
++		goto complete;
++	}
++
++	dummy_data = xmalloc(DUMMY_DATA_UNIT_SIZE);
++	if(!dummy_data) {
++		rt = EXIT_FAILURE;
++		goto complete;
++	}
++
++#if 0
++	send_data_size = (data_size > DUMMY_DATA_UNIT_SIZE) ? DUMMY_DATA_UNIT_SIZE : data_size;
++	while(sent_data_size < data_size) {
++		unsigned int this_sent_data_size = 0;
++
++		this_sent_data_size = safe_read(from, (const void *)dummy_data, send_data_size);
++		if(this_sent_data_size != send_data_size) {
++			break;
++		}
++
++		sent_data_size += this_sent_data_size;
++
++		send_data_size = (sent_data_size == data_size) ? 0 : ( 
++			((sent_data_size + DUMMY_DATA_UNIT_SIZE) > data_size) ? (data_size-sent_data_size) : DUMMY_DATA_UNIT_SIZE);
++	}
++#else
++	/* copy the file */
++	if (bb_copyfd_eof(from, to) == -1) {
++		/* error msg is already printed by bb_copyfd_eof */
++		rt =  EXIT_FAILURE;
++		goto complete;
++	}
++#endif
++
++#if 1
++    ipDiagUlObj->TestBytesSent = data_size;
++        //ipDiagUlObj->TestBytesSent = sent_data_size;
++#else
++	ipDiagUlObj->TotalBytesSent = sent_data_size;
++#endif
++
++complete:
++	/* close data connection */
++	close(from);
++	close(to);
++
++	/* does server confirm that transfer is finished? */
++	if (ftpcmd(NULL, NULL) != 226) {
++		ftp_die(NULL);
++	}else {
++		makeTimeStamp(ipDiagUlObj->EOMTime, sizeof(ipDiagUlObj->EOMTime));
++
++                ifBytesReceivedEnd = getReceiveByte(intf);
++                ipDiagUlObj->TotalBytesReceived = (ifBytesReceivedEnd > ifBytesReceivedStart) ?
++                       (unsigned int)(ifBytesReceivedEnd - ifBytesReceivedStart) : 0;
++                //printf("%s : Receive data end: %u\n", __FUNCTION__, ipDiagUlObj->TotalBytesReceived);
++
++                ifBytesSentEnd = getSentByte(intf);
++                ipDiagUlObj->TotalBytesSent = (ifBytesSentEnd > ifBytesSentStart) ?
++                       (unsigned int)(ifBytesSentEnd - ifBytesSentStart) : 0;
++                //printf("%s : Sent data end: %u\n", __FUNCTION__, ipDiagUlObj->TotalBytesSent);
++	}
++	ftpcmd("QUIT", NULL);
++
++	if(dummy_data) free(dummy_data);
++
++	return rt;
++}
+ #endif
+ 
+ static int pump_data_and_QUIT(int from, int to)
+@@ -537,10 +632,19 @@
+ 	int fd_data;
+ 	int fd_local = -1;
+ 	off_t beg_range = 0;
++#ifdef ZCFG_SUPPORT
++	int rt;
++
++	makeTimeStamp(ipDiagUlObj->TCPOpenRequestTime, sizeof(ipDiagUlObj->TCPOpenRequestTime));
++#endif
+ 
+ 	/* connect to the data socket */
+ 	fd_data = xconnect_ftpdata();
+ 
++#ifdef ZCFG_SUPPORT
++	makeTimeStamp(ipDiagUlObj->TCPOpenResponseTime, sizeof(ipDiagUlObj->TCPOpenResponseTime));
++#endif
++
+ 	if (ftpcmd("SIZE", server_path) != 213) {
+ 		do_continue = 0;
+ 	}
+@@ -549,6 +653,11 @@
+ 		fd_local = STDOUT_FILENO;
+ 		do_continue = 0;
+ 	}
++#ifdef ZCFG_SUPPORT
++	else {
++		fd_local = -1;
++	}
++#endif
+ 
+ 	if (do_continue) {
+ 		struct stat sbuf;
+@@ -587,7 +696,28 @@
+ 		);
+ 	}
+ 
++#ifdef ZCFG_SUPPORT
++	if(testSendLength) {
++		makeTimeStamp(ipDiagUlObj->ROMTime, sizeof(ipDiagUlObj->ROMTime));
++
++		if(setsockopt(fd_data, IPPROTO_IP, IP_TOS, &ipDscp, sizeof(ipDscp)) != 0) {
++			printf("Set ftp ip dscp failed!\n");
++		}
++
++		makeTimeStamp(ipDiagUlObj->BOMTime, sizeof(ipDiagUlObj->BOMTime));
++
++                ifBytesReceivedStart = getReceiveByte(intf);
++                //printf("%s : Receive data start: %ld\n", __FUNCTION__, ifBytesReceivedStart);
++                ifBytesSentStart = getSentByte(intf);
++                //printf("%s : Sent data start: %ld\n", __FUNCTION__, ifBytesSentStart);
++
++		rt = receive_dummy_data_and_QUIT((const unsigned int)testSendLength, fd_data, fd_local);
++
++		return rt;
++	}else return pump_data_and_QUIT(fd_data, fd_local);
++#else
+ 	return pump_data_and_QUIT(fd_data, fd_local);
++#endif
+ }
+ #endif
+ 
+@@ -675,6 +805,9 @@
+ 	"dscp\0"        Required_argument "d"
+ 	"ethpriority\0" Required_argument "r"
+ 	"dummy_size\0"  Required_argument "m"
++#ifdef ZCFG_SUPPORT_TR369
++	"instanceNum"   Required_argument "N"
++#endif
+ #endif
+ 	;
+ #endif
+@@ -711,8 +844,16 @@
+ #endif
+ 	opt_complementary = "-2:vv:cc"; /* must have 2 to 3 params; -v and -c count */
+ #ifdef ZCFG_SUPPORT
+-	getopt32(argv, "cvu:p:P:n:l:d:r:m:", &user, &password, &port, &intf, &url, &dscp, &ethpriority, &dummy_size,
+-					&verbose_flag, &do_continue);
++	getopt32(argv, "cvu:p:P:n:l:d:r:m:"
++#ifdef ZCFG_SUPPORT_TR369
++			       "N:"
++#endif
++			, &user, &password, &port, &intf, &url, &dscp, &ethpriority, &dummy_size
++#ifdef ZCFG_SUPPORT_TR369
++			, &G.instanceNum
++#endif
++			, &verbose_flag, &do_continue
++			);
+ #else
+ 	getopt32(argv, "cvu:p:P:", &user, &password, &port,
+ 					&verbose_flag, &do_continue);

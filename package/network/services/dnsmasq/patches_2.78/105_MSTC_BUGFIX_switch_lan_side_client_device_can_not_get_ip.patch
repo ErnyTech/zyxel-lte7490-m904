@@ -1,0 +1,16 @@
+Index: dnsmasq-2.78/src/dnsmasq.h
+===================================================================
+--- dnsmasq-2.78.orig/src/dnsmasq.h	2021-06-11 10:02:22.828227000 +0800
++++ dnsmasq-2.78/src/dnsmasq.h	2021-06-11 10:23:19.744227000 +0800
+@@ -144,7 +144,11 @@
+ 
+ #ifdef ZYXEL_DHCP_CHECK_IF_IP_AVAILABLE
+ #include <poll.h>
++#ifdef DHCP_LAN_IF_ETH1
++#define LAN_INTERFACE "eth1"
++#else
+ #define LAN_INTERFACE "eth2"
++#endif //DHCP_LAN_IF_ETH1
+ #endif
+ 
+ /* daemon is function in the C library.... */

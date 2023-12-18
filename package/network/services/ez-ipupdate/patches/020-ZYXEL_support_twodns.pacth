@@ -1,0 +1,14 @@
+Index: ez-ipupdate-3.0.11b8/ez-ipupdate.c
+===================================================================
+--- ez-ipupdate-3.0.11b8.orig/ez-ipupdate.c	2021-11-02 17:51:53.104203000 +0800
++++ ez-ipupdate-3.0.11b8/ez-ipupdate.c	2021-11-02 17:51:24.152203000 +0800
+@@ -6796,6 +6796,9 @@
+   snprintf(buf_str, BUFFER_SIZE, "hostname=%s&",host);
+   strcat(buf, buf_str);
+ 
++  snprintf(buf_str, BUFFER_SIZE, "ip=%s",address);
++  strcat(buf, buf_str);
++
+   snprintf(buf_str, BUFFER_SIZE, " HTTP/1.1\015\012");
+   strcat(buf, buf_str);
+ 
